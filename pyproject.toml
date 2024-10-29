@@ -1,0 +1,25 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "crnn"
+version = "0.1.0"
+description = "Constrained recurrent neural network for system identification."
+authors = [{name = "Daniel Frank", email = "daniel.frank@ki.uni-stuttgart.de"}]
+requires-python = ">=3.8"
+license = "MIT"
+readme = "README.md"
+dependencies = [
+    "torch",
+    "scipy",
+    "numpy<2.0",
+    "pandas",
+    "cvxpy",
+    "pydantic",
+    "matplotlib"
+    "mosek"
+]
+
+
+

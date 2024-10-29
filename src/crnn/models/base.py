@@ -1,0 +1,175 @@
+import torch
+from abc import ABC, abstractmethod
+from typing import List, Optional, Literal, Union, Tuple
+from cvxpy.constraints.constraint import Constraint
+from ..utils import transformation as trans
+from ..configuration import LureSystemClass
+import cvxpy as cp
+
+
+import torch.nn as nn
+
+class ConstrainedModule(nn.Module, ABC):
+    def __init__(
+            self, 
+            nz:int, 
+            nd: int,
+            ne: int,
+            device= torch.device('cpu'),
+            optimizer: str = cp.MOSEK,
+            nonlinearity:Literal['tanh', 'relu', 'deadzone']='tanh'
+    ) -> None:
+        super(ConstrainedModule, self).__init__()
+        self.nz, self.nw = nz, nz # size of nonlinear channel
+        self.nx = self.nz # internal state size matches size of nonlinear channel for this network
+        self.nd, self.ne = nd, ne # size of input and output
+        self.optimizer = optimizer
+
+        if nonlinearity == 'tanh':
+            self.nl = nn.Tanh()
+        elif nonlinearity == 'relu':
+            self.nl = nn.ReLU()
+        elif nonlinearity == 'deadzone':
+            self.nl = nn.Softshrink()
+        else:
+            raise ValueError(f"Unsupported nonlinearity: {nonlinearity}")
+        self.semidefinite_constraints = []
+        self.pointwise_constraints = []
+
+        self.A_tilde = torch.nn.Parameter(torch.zeros((self.nx,self.nx)))
+        self.B = torch.nn.Parameter(torch.normal(0,1/self.nx, size=(self.nx,self.nd)))
+        self.B2_tilde = torch.nn.Parameter(torch.zeros((self.nx,self.nw)))
+        
+        self.C = torch.nn.Parameter(torch.normal(0,1/self.ne, size=(self.ne,self.nx)))
+        self.D = torch.nn.Parameter(torch.normal(0,1/self.ne, size=(self.ne,self.nd)))
+        self.D12 = torch.nn.Parameter(torch.normal(0,1/self.ne, size=(self.ne,self.nw)))
+
+        self.C2 = torch.nn.Parameter(torch.zeros((self.nz,self.nx)))
+        self.D21 = torch.nn.Parameter(torch.normal(0,1/self.nz, size=(self.nz,self.nd)))
+        self.D22 = torch.zeros((self.nz, self.nw))
+
+        self.X = torch.nn.Parameter(torch.zeros((self.nx, self.nx)))
+
+
+    def set_lure_system(self) -> None:
+        X_inv = torch.linalg.inv(self.X)
+        A = X_inv @ self.A_tilde
+        B2 = X_inv @ self.B2_tilde
+
+        theta = trans.torch_bmat(
+            [
+                [A, self.B, B2],
+                [self.C, self.D, self.D12],
+                [self.C2, self.D21, self.D22]
+            ]
+        )
+        sys = trans.get_lure_matrices(theta)
+        self.lure = LureSystem(sys)
+
+    @abstractmethod
+    def initialize_parameters(self) -> None:
+        pass
+
+    @abstractmethod
+    def check_constraints(self) -> bool:
+        pass
+
+    def add_semidefinite_constraints(self, constraints=List[Constraint]) -> None:
+        self.semidefinite_constraints.extend(constraints)
+
+    def add_pointwise_constraints(self, constraints=List[Constraint]) -> None:
+        self.semidefinite_constraints.extend(constraints)
+
+    def forward(self, d:torch.Tensor, x0:Optional[torch.Tensor] = None) -> torch.Tensor:
+        B, N, nu = d.shape # number of batches, length of sequence, input size
+        assert self.lure._nu == nu
+        if x0 is None:
+            x0 = torch.zeros(size=(B,self.nx)).to(self.device)
+        ds = d.reshape(shape=(B, N, nu, 1))
+        es_hat, x = self.lure.forward(x0=x0, us=ds, return_states=True)
+        return es_hat.reshape(B, N, self.lure._ny), (
+            x[:, : self.nx].reshape(B, self.nx),
+            x[:, self.nx :].reshape(B, self.nx),
+        )
+    
+class Linear(nn.Module):
+    def __init__(
+        self, A: torch.Tensor, B: torch.Tensor, C: torch.Tensor, D: torch.Tensor
+    ) -> None:
+        super().__init__()
+        self._nx = A.shape[0]
+        self._nu = B.shape[1]
+        self._ny = C.shape[0]
+
+        self.A = A
+        self.B = B
+        self.C = C
+        self.D = D
+
+
+    def _init_weights(self) -> None:
+        for p in self.parameters():
+            torch.nn.init.uniform_(
+                tensor=p, a=-np.sqrt(1 / self._nu), b=np.sqrt(1 / self._nu)
+            )
+
+    def state_dynamics(self, x: torch.Tensor, u: torch.Tensor) -> torch.Tensor:
+        return self.A @ x + self.B @ u
+
+    def output_dynamics(self, x: torch.Tensor, u: torch.Tensor) -> torch.Tensor:
+        return self.C @ x + self.D @ u
+
+    def forward(
+        self, x0: torch.Tensor, us: torch.Tensor, return_state: bool = False
+    ) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
+        device = self.A.device
+        n_batch, N, _, _ = us.shape
+        x = torch.zeros(size=(n_batch, N + 1, self._nx, 1)).to(device)
+        y = torch.zeros(size=(n_batch, N, self._ny, 1)).to(device)
+        x[:, 0, :, :] = x0
+
+        for k in range(N):
+            x[:, k + 1, :, :] = self.state_dynamics(x=x[:, k, :, :], u=us[:, k, :, :])
+            y[:, k, :, :] = self.output_dynamics(x=x[:, k, :, :], u=us[:, k, :, :])
+        if return_state:
+            return (y, x)
+        else:
+            return y
+
+
+class LureSystem(Linear):
+    def __init__(
+        self,
+        sys: LureSystemClass,
+        device: torch.device = torch.device('cpu')
+    ) -> None:
+        super().__init__(A=sys.A, B=sys.B, C=sys.C, D=sys.D)
+        self._nw = sys.B2.shape[1]
+        self._nz = sys.C2.shape[0]
+        assert self._nw == self._nz
+        self.B2 = sys.B2
+        self.C2 = sys.C2
+        self.D12 = sys.D12
+        self.D21 = sys.D21
+        self.Delta = sys.Delta  # static nonlinearity
+        self.device = device
+    
+    def forward(
+        self, x0: torch.Tensor, us: torch.Tensor, return_states: bool = False
+    ) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
+        n_batch, N, _, _ = us.shape
+        y = torch.zeros(size=(n_batch, N, self._ny, 1)).to(self.device)
+        x = x0.reshape(n_batch, self._nx, 1)
+
+        for k in range(N):
+            w = self.Delta(self.C2 @ x + self.D21 @ us[:, k, :, :])
+            x = super().state_dynamics(x=x, u=us[:, k, :, :]) + self.B2 @ w
+            y[:, k, :, :] = (
+                super().output_dynamics(x=x, u=us[:, k, :, :]) + self.D12 @ w
+            )
+        if return_states:
+            return (y, x)
+        else:
+            return y
+
+
