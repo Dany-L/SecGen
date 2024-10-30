@@ -17,9 +17,18 @@ dependencies = [
     "pandas",
     "cvxpy",
     "pydantic",
-    "matplotlib"
-    "mosek"
+    "matplotlib",
+    "mosek",
+    "tikzplotlib"
 ]
+[project.optional-dependencies]
+test = [
+    "black",
+    "isort",
+    "mypy",
+    "flake8"
+]
+
 
 
 

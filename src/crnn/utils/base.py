@@ -1,5 +1,4 @@
-
-def get_duration_str(start_time:float, end_time:float)-> str:
+def get_duration_str(start_time: float, end_time: float) -> str:
     duration = end_time - start_time
     days, remainder = divmod(duration, 86400)
     hours, remainder = divmod(remainder, 3600)
