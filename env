@@ -1,3 +1,0 @@
-export DATASET_DIRECTORY=~/actuated_pendulum/nonlinear-initial_state-0_M-500_T-10/processed
-export DATASET_DIRECTORY=~/actuated_pendulum/results_local
-export CONFIG_DIRECTORY=~/Documents/01_Git/01_promotion/crnn/config
