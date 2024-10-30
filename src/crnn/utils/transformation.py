@@ -24,7 +24,7 @@ def get_lure_matrices(
         D22 = gen_plant[nx+ne:, nx+nd:]
 
         return LureSystemClass(
-                A,B,B2,C,D,D12,D21,D22,nonlinearity
+                A,B,B2,C,D,D12,C2,D21,D22,nonlinearity
         )
 
 def bmat(mat: List[List[NDArray[np.float64]]]) -> NDArray[np.float64]:

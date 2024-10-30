@@ -1,11 +1,10 @@
 import torch
 from abc import ABC, abstractmethod
-from typing import List, Optional, Literal, Union, Tuple
+from typing import List, Optional, Literal, Union, Tuple, Callable
 from cvxpy.constraints.constraint import Constraint
 from ..utils import transformation as trans
-from ..configuration import LureSystemClass
+from ..configuration import LureSystemClass, BaseConfig
 import cvxpy as cp
-
 
 import torch.nn as nn
 
@@ -15,7 +14,6 @@ class ConstrainedModule(nn.Module, ABC):
             nz:int, 
             nd: int,
             ne: int,
-            device= torch.device('cpu'),
             optimizer: str = cp.MOSEK,
             nonlinearity:Literal['tanh', 'relu', 'deadzone']='tanh'
     ) -> None:
@@ -63,7 +61,7 @@ class ConstrainedModule(nn.Module, ABC):
                 [self.C2, self.D21, self.D22]
             ]
         )
-        sys = trans.get_lure_matrices(theta)
+        sys = trans.get_lure_matrices(theta, self.nx,self.nd,self.ne,self.nl)
         self.lure = LureSystem(sys)
 
     @abstractmethod
@@ -74,23 +72,20 @@ class ConstrainedModule(nn.Module, ABC):
     def check_constraints(self) -> bool:
         pass
 
-    def add_semidefinite_constraints(self, constraints=List[Constraint]) -> None:
+    def add_semidefinite_constraints(self, constraints=List[Callable]) -> None:
         self.semidefinite_constraints.extend(constraints)
 
-    def add_pointwise_constraints(self, constraints=List[Constraint]) -> None:
+    def add_pointwise_constraints(self, constraints=List[Callable]) -> None:
         self.semidefinite_constraints.extend(constraints)
 
     def forward(self, d:torch.Tensor, x0:Optional[torch.Tensor] = None) -> torch.Tensor:
         B, N, nu = d.shape # number of batches, length of sequence, input size
         assert self.lure._nu == nu
         if x0 is None:
-            x0 = torch.zeros(size=(B,self.nx)).to(self.device)
+            x0 = torch.zeros(size=(B,self.nx))
         ds = d.reshape(shape=(B, N, nu, 1))
         es_hat, x = self.lure.forward(x0=x0, us=ds, return_states=True)
-        return es_hat.reshape(B, N, self.lure._ny), (
-            x[:, : self.nx].reshape(B, self.nx),
-            x[:, self.nx :].reshape(B, self.nx),
-        )
+        return es_hat.reshape(B, N, self.lure._ny), x.reshape(B,self.nx)
     
 class Linear(nn.Module):
     def __init__(
@@ -122,10 +117,9 @@ class Linear(nn.Module):
     def forward(
         self, x0: torch.Tensor, us: torch.Tensor, return_state: bool = False
     ) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
-        device = self.A.device
         n_batch, N, _, _ = us.shape
-        x = torch.zeros(size=(n_batch, N + 1, self._nx, 1)).to(device)
-        y = torch.zeros(size=(n_batch, N, self._ny, 1)).to(device)
+        x = torch.zeros(size=(n_batch, N + 1, self._nx, 1))
+        y = torch.zeros(size=(n_batch, N, self._ny, 1))
         x[:, 0, :, :] = x0
 
         for k in range(N):
@@ -141,7 +135,6 @@ class LureSystem(Linear):
     def __init__(
         self,
         sys: LureSystemClass,
-        device: torch.device = torch.device('cpu')
     ) -> None:
         super().__init__(A=sys.A, B=sys.B, C=sys.C, D=sys.D)
         self._nw = sys.B2.shape[1]
@@ -152,13 +145,12 @@ class LureSystem(Linear):
         self.D12 = sys.D12
         self.D21 = sys.D21
         self.Delta = sys.Delta  # static nonlinearity
-        self.device = device
     
     def forward(
         self, x0: torch.Tensor, us: torch.Tensor, return_states: bool = False
     ) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
         n_batch, N, _, _ = us.shape
-        y = torch.zeros(size=(n_batch, N, self._ny, 1)).to(self.device)
+        y = torch.zeros(size=(n_batch, N, self._ny, 1))
         x = x0.reshape(n_batch, self._nx, 1)
 
         for k in range(N):
@@ -172,4 +164,8 @@ class LureSystem(Linear):
         else:
             return y
 
+def load_model(model:ConstrainedModule, model_filename:str) -> ConstrainedModule:
+    model.load_state_dict(torch.load(model_filename))
+    model.set_lure_system()
+    return model
 

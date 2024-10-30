@@ -2,37 +2,31 @@ from pydantic import BaseModel
 import torch
 import os
 import json
-from typing import List, Callable
+from typing import List, Callable, Literal
 from dataclasses import dataclass
 from numpy.typing import NDArray
 import numpy as np
 
 CONFIG_FOLDER_ENV_VAR = 'CONFIG_DIRECTORY'
+DATASET_DIR_ENV_VAR = 'DATASET_DIRECTORY'
+RESULT_DIR_ENV_VAR = 'RESULT_DIRECTORY'
 
 @dataclass
 class LureSystemClass:
-    # A: NDArray[np.float64]
-    # B: NDArray[np.float64]
-    # B2: NDArray[np.float64]
-    # C: NDArray[np.float64]
-    # D: NDArray[np.float64]
-    # D12: NDArray[np.float64]
-    # D21: NDArray[np.float64]
-    # D22: NDArray[np.float64]
-    # Delta: Callable
     A: torch.Tensor 
     B: torch.Tensor 
     B2: torch.Tensor 
     C: torch.Tensor 
     D: torch.Tensor 
     D12: torch.Tensor 
+    C2: torch.Tensor
     D21: torch.Tensor 
     D22: torch.Tensor 
-    nl: torch.nn.Module 
+    Delta: torch.nn.Module 
 
 
 class OptimizerConfig(BaseModel):
-    name: str
+    name: Literal['adam', 'sgd']
     learning_rate: float
 
 class HorizonsConfig(BaseModel):
@@ -47,6 +41,7 @@ class BaseConfig(BaseModel):
     nz: int
     batch_size: int
     window: int
+    loss_function: Literal['mse']
     input_names: List[str]
     output_names: List[str]
     horizons: HorizonsConfig
@@ -57,3 +52,5 @@ def load_configuration()-> BaseConfig:
     with open(base_config_filename, 'r') as file:
         config_data = json.load(file)
     return BaseConfig(**config_data)
+
+
