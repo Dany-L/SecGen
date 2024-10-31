@@ -19,6 +19,7 @@ def train_model(
 ) -> base.ConstrainedModule:
 
     model.initialize_parameters()
+    model.set_lure_system()
     model.train()
     tracker.track(base_tracker.Start(""))
 
@@ -26,12 +27,11 @@ def train_model(
         loss = 0
         for step, batch in enumerate(train_loader):
             model.zero_grad()
-            model.set_lure_system()
             e_hat, _ = model.forward(batch["d"])
             batch_loss = loss_function(e_hat, batch["e"])
             batch_loss.backward()
             optimizer.step()
-            model.check_constraints()
+            model.set_lure_system()
             loss += batch_loss
         if epoch % 100 == 0:
             fig = plot.plot_sequence(
@@ -43,6 +43,7 @@ def train_model(
 
         if not model.check_constraints():
             model.project_parameters()
+            model.set_lure_system()
         tracker.track(base_tracker.Log("", f"{epoch}/{epochs}\t l= {loss:.2f}"))
     tracker.track(base_tracker.Stop(""))
 

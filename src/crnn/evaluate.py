@@ -16,6 +16,7 @@ def evaluate_model(
 ) -> None:
 
     tracker.track(base_tracker.Start(""))
+    tracker.track(base_tracker.Log('', f'Constraints satisfied? {model.check_constraints()}'))
 
     es, e_hats = [], []
     for _, sample in enumerate(test_dataset):
@@ -24,9 +25,12 @@ def evaluate_model(
         es.append(sample["e"])
 
     e = metrics.forward(es, e_hats)
+    num_par = sum(p.numel() for p in model.parameters() if p.requires_grad)
 
     tracker.track(base_tracker.SaveSequences("", e_hats, es, "test_output"))
     tracker.track(base_tracker.Log("", f"RMSE: {np.mean(e):.2f}"))
+    tracker.track(base_tracker.Log('', f'Number of parameters: {num_par}'))
+    
     tracker.track(
         base_tracker.SaveFig(
             "",

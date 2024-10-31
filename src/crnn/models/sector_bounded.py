@@ -60,7 +60,7 @@ class SectorBoundedLtiRnn(base.ConstrainedModule):
             )
         )
 
-        self.A_tilde.data.data = torch.tensor(A_tilde.value)
+        self.A_tilde.data = torch.tensor(A_tilde.value)
         self.B2_tilde.data = torch.tensor(B2_tilde.value)
 
         self.C2.data = torch.tensor(C2.value)
@@ -92,7 +92,7 @@ class SectorBoundedLtiRnn(base.ConstrainedModule):
             )
         )
 
-        self.A_tilde.data.data = torch.tensor(A_tilde.value)
+        self.A_tilde.data = torch.tensor(A_tilde.value)
         self.B2_tilde.data = torch.tensor(B2_tilde.value)
 
         self.C2.data = torch.tensor(C2.value)
@@ -153,7 +153,7 @@ class GeneralSectorBoundedLtiRnn(base.ConstrainedModule):
             )
         )
 
-        self.A_tilde.data.data = torch.tensor(A_tilde.value)
+        self.A_tilde.data = torch.tensor(A_tilde.value)
         self.B2_tilde.data = torch.tensor(B2_tilde.value)
 
         self.C2.data = torch.tensor(C2.value)
@@ -212,7 +212,7 @@ class GeneralSectorBoundedLtiRnn(base.ConstrainedModule):
             )
         )
 
-        self.A_tilde.data.data = torch.tensor(A_tilde.value)
+        self.A_tilde.data = torch.tensor(A_tilde.value)
         self.B2_tilde.data = torch.tensor(B2_tilde.value)
 
         self.C2.data = torch.tensor(C2.value)

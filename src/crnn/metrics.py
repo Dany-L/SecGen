@@ -11,14 +11,17 @@ class Metrics:
 
     @abstractmethod
     def forward(
-        self, es: List[NDArray[np.float64]], e_hats: List[NDArray[np.float64]]
+        es: List[NDArray[np.float64]], e_hats: List[NDArray[np.float64]]
     ) -> np.float64:
         pass
 
 
 class Rmse(Metrics):
+    def __init__(self):
+        pass
+
     def forward(
-        self, es: List[NDArray[np.float64]], e_hats: List[NDArray[np.float64]]
+        es: List[NDArray[np.float64]], e_hats: List[NDArray[np.float64]]
     ) -> np.float64:
         M = len(es)
         h, ne = es[0].shape
