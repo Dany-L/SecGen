@@ -12,14 +12,14 @@ from . import base
 class SectorBoundedLtiRnn(base.ConstrainedModule):
     def __init__(
         self,
-        nz: int,
         nd: int,
         ne: int,
+        nz: int,
         optimizer: str = cp.MOSEK,
-        nonlinearity: Literal["tanh", "relu", "deadzone"] = "tanh",
+        nonlinearity: Literal["tanh", "relu", "deadzone", "sat"] = "tanh",
         tracker: base_tracker.BaseTracker = base_tracker.BaseTracker(),
     ) -> None:
-        super().__init__(nz, nd, ne, optimizer, nonlinearity)
+        super().__init__(nz, nd, ne, optimizer, nonlinearity, tracker)
         self.tracker = tracker
 
     def sdp_constraints(self) -> List[Callable]:
@@ -115,7 +115,7 @@ class GeneralSectorBoundedLtiRnn(base.ConstrainedModule):
         nd: int,
         ne: int,
         optimizer: str = cp.MOSEK,
-        nonlinearity: Literal["deadzone"] = "deadzone",
+        nonlinearity: Literal["deadzone", "sat"] = "deadzone",
         tracker: base_tracker.BaseTracker = base_tracker.BaseTracker(),
     ) -> None:
         super().__init__(nz, nd, ne, optimizer, nonlinearity)

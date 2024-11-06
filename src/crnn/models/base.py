@@ -9,24 +9,24 @@ import torch.nn as nn
 from ..configuration import LureSystemClass
 from ..utils import transformation as trans
 
+# from .. import tracker as base_tracker
 
-class ConstrainedModule(nn.Module, ABC):
+
+class DynamicIdentificationModel(nn.Module, ABC):
+
     def __init__(
         self,
-        nz: int,
         nd: int,
         ne: int,
-        optimizer: str = cp.MOSEK,
-        nonlinearity: Literal["tanh", "relu", "deadzone"] = "tanh",
+        nz: int,
+        nonlinearity: Literal["tanh", "relu", "deadzone", "sat"] = "tanh",
     ) -> None:
-        super(ConstrainedModule, self).__init__()
+        super(DynamicIdentificationModel, self).__init__()
         self.nz, self.nw = nz, nz  # size of nonlinear channel
         self.nx = (
             self.nz
         )  # internal state size matches size of nonlinear channel for this network
         self.nd, self.ne = nd, ne  # size of input and output
-        self.optimizer = optimizer
-
         self.nl: Optional[nn.Module] = None
         if nonlinearity == "tanh":
             self.nl = nn.Tanh()
@@ -34,8 +34,66 @@ class ConstrainedModule(nn.Module, ABC):
             self.nl = nn.ReLU()
         elif nonlinearity == "deadzone":
             self.nl = nn.Softshrink()
+        elif nonlinearity == "sat":
+            self.nl = nn.Hardtanh()
         else:
             raise ValueError(f"Unsupported nonlinearity: {nonlinearity}")
+
+    @abstractmethod
+    def add_semidefinite_constraints(self, constraints=List[Callable]) -> None:
+        pass
+
+    @abstractmethod
+    def add_pointwise_constraints(self, constraints=List[Callable]) -> None:
+        pass
+
+    @abstractmethod
+    def initialize_parameters(self) -> None:
+        pass
+
+    def set_lure_system(self) -> LureSystemClass:
+        return LureSystem(
+            trans.get_lure_matrices(
+                torch.zeros(
+                    size=(self.nx + self.nd + self.nw, self.nx + self.ne + self.nz)
+                ),
+                self.nx,
+                self.nd,
+                self.ne,
+                self.nl,
+            )
+        )
+
+    @abstractmethod
+    def forward(
+        self, d: torch.Tensor, x0: Optional[torch.Tensor] = None
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        pass
+
+    @abstractmethod
+    def initialize_parameters(self) -> None:
+        pass
+
+    def check_constraints(self) -> bool:
+        return True
+
+    @abstractmethod
+    def project_parameters(self) -> None:
+        pass
+
+
+class ConstrainedModule(DynamicIdentificationModel, nn.Module):
+    def __init__(
+        self,
+        nd: int,
+        ne: int,
+        nz: int,
+        optimizer: str = cp.MOSEK,
+        nonlinearity: Literal["tanh", "relu", "deadzone", "sat"] = "tanh",
+    ) -> None:
+        super(DynamicIdentificationModel, self).__init__(nd, ne, nz, nonlinearity)
+        self.optimizer = optimizer
+
         self.semidefinite_constraints: List[Callable] = []
         self.pointwise_constraints: List[Callable] = []
 
@@ -75,18 +133,6 @@ class ConstrainedModule(nn.Module, ABC):
         self.lure = LureSystem(sys)
 
         return sys
-
-    @abstractmethod
-    def initialize_parameters(self) -> None:
-        pass
-
-    @abstractmethod
-    def check_constraints(self) -> bool:
-        pass
-
-    @abstractmethod
-    def project_parameters(self) -> None:
-        pass
 
     def add_semidefinite_constraints(self, constraints=List[Callable]) -> None:
         self.semidefinite_constraints.extend(constraints)

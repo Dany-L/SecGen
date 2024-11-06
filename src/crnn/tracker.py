@@ -1,6 +1,6 @@
+import dataclasses
 import os
 import time
-from dataclasses import dataclass
 from datetime import datetime
 from typing import List, Literal, Optional
 
@@ -8,65 +8,71 @@ import numpy as np
 from matplotlib.figure import Figure
 from numpy.typing import NDArray
 
-from .configuration import FIG_FOLDER_NAME, BaseConfig
-from .io import (save_model, save_model_parameter, save_sequences_to_mat,
-                 write_config)
+from .configuration import FIG_FOLDER_NAME, BaseConfig, NormalizationParameters
+from .data_io import (save_model, save_model_parameter, save_sequences_to_mat,
+                      write_config)
 from .models.base import ConstrainedModule
 from .utils import base as utils
 from .utils import plot
 
 
-@dataclass
+@dataclasses.dataclass
 class Event:
     msg: str
 
 
-@dataclass
+@dataclasses.dataclass
 class Log(Event):
     log_msg: str
 
 
-@dataclass
+@dataclasses.dataclass
 class SaveFig(Event):
     fig: Figure
     name: str
 
 
-@dataclass
+@dataclasses.dataclass
 class Start(Event):
     pass
 
 
-@dataclass
+@dataclasses.dataclass
 class Stop(Event):
     pass
 
 
-@dataclass
+@dataclasses.dataclass
 class ModelEvent(Event):
     model: ConstrainedModule
 
 
-@dataclass
+@dataclasses.dataclass
 class SaveModel(ModelEvent):
-    pass
+    name: str
 
 
-@dataclass
+@dataclasses.dataclass
 class SaveSequences(Event):
     e_hats: List[NDArray[np.float64]]
     es: List[NDArray[np.float64]]
     file_name: str
 
 
-@dataclass
+@dataclasses.dataclass
 class SaveModelParameter(ModelEvent):
     pass
 
 
-@dataclass
+@dataclasses.dataclass
 class SaveConfig(Event):
     config: BaseConfig
+
+
+@dataclasses.dataclass
+class SaveNormalization(Event):
+    input: NormalizationParameters
+    output: NormalizationParameters
 
 
 class BaseTracker:
@@ -84,6 +90,17 @@ class BaseTracker:
         if isinstance(event, Log):
             print(event.log_msg)
             self.write_to_logfile(event.log_msg)
+        elif isinstance(event, SaveNormalization):
+            np.savez(
+                os.path.join(self.directory, "normalization.npz"),
+                input_mean=event.input.mean,
+                input_std=event.input.std,
+                output_mean=event.output.mean,
+                output_std=event.output.std,
+            )
+            self.write_to_logfile(
+                f"Save normalization mean and std to {self.directory}"
+            )
         elif isinstance(event, SaveFig):
             fig_subdirectory = os.path.join(self.directory, FIG_FOLDER_NAME)
             os.makedirs(fig_subdirectory, exist_ok=True)
@@ -97,9 +114,11 @@ class BaseTracker:
                 f"--- Stop duration: {utils.get_duration_str(self.start_time, time.time())} ---"
             )
         elif isinstance(event, SaveModel):
-            save_model(event.model, self.directory, self.get_model_file_name())
+            save_model(
+                event.model, self.directory, self.get_model_file_name(event.name)
+            )
             self.write_to_logfile(
-                f"Save model to {self.get_model_file_name()} in {self.directory}"
+                f"Save model to {self.get_model_file_name(event.name)} in {self.directory}"
             )
         elif isinstance(event, SaveModelParameter):
             save_model_parameter(
@@ -130,5 +149,5 @@ class BaseTracker:
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             f.write(f"{timestamp} - {msg}\n")
 
-    def get_model_file_name(self) -> str:
-        return f"parameters-{self.model_name}.pth"
+    def get_model_file_name(self, name: str) -> str:
+        return f"parameters-{name}-{self.model_name}.pth"

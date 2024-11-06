@@ -7,7 +7,8 @@ import torch
 from numpy.typing import NDArray
 from scipy.io import savemat
 
-from .configuration import DATASET_DIR_ENV_VAR, RESULT_DIR_ENV_VAR, BaseConfig
+from .configuration import (DATASET_DIR_ENV_VAR, RESULT_DIR_ENV_VAR,
+                            BaseConfig, Normalization, NormalizationParameters)
 from .models.base import ConstrainedModule
 
 
@@ -28,7 +29,7 @@ def load_data(
     Tuple[List[NDArray[np.float64]], List[NDArray[np.float64]]]: A Tuple containing two lists of NumPy arrays,
     one for the input columns and one for the output columns, from all CSV files in the specified type directory.
     """
-    dataset_dir: Optional[str] = os.getenv(os.path.expanduser(DATASET_DIR_ENV_VAR))
+    dataset_dir: Optional[str] = os.path.expanduser(os.getenv(DATASET_DIR_ENV_VAR))
     if not dataset_dir:
         raise ValueError(f"Environment variable {DATASET_DIR_ENV_VAR} is not set.")
 
@@ -75,7 +76,7 @@ def load_file(
 
 
 def get_result_directory_name(model_name: str) -> str:
-    directory = os.getenv(os.path.expanduser(RESULT_DIR_ENV_VAR))
+    directory = os.path.expanduser(os.getenv(RESULT_DIR_ENV_VAR))
     return os.path.join(directory, model_name)
 
 
@@ -125,3 +126,17 @@ def save_sequences_to_mat(
 def write_config(config: BaseConfig, file_name: str) -> None:
     with open(file_name, "w") as f:
         f.write(config.model_dump_json())
+
+
+def load_normalization(directory: str) -> Normalization:
+    normalization = np.load(
+        os.path.join(directory, "normalization.npz"), allow_pickle=True
+    )
+    return Normalization(
+        input=NormalizationParameters(
+            mean=normalization["input_mean"], std=normalization["input_std"]
+        ),
+        output=NormalizationParameters(
+            mean=normalization["output_mean"], std=normalization["output_std"]
+        ),
+    )
