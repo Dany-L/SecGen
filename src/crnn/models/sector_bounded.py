@@ -4,18 +4,14 @@ import cvxpy as cp
 import numpy as np
 import torch
 
-from .. import tracker as base_tracker
 from ..utils import transformation as trans
 from . import base
-from pydantic import BaseModel
 
 
 class SectorBoundedLtiRnn(base.ConstrainedModule):
     CONFIG = base.ConstrainedModuleConfig
-    def __init__(
-        self,
-        config: base.ConstrainedModuleConfig
-    ) -> None:
+
+    def __init__(self, config: base.ConstrainedModuleConfig) -> None:
         super().__init__(config)
         # self.tracker = tracker
 
@@ -107,10 +103,8 @@ class SectorBoundedLtiRnn(base.ConstrainedModule):
 
 class GeneralSectorBoundedLtiRnn(base.ConstrainedModule):
     CONFIG = base.ConstrainedModuleConfig
-    def __init__(
-        self,
-        config: base.ConstrainedModuleConfig
-    ) -> None:
+
+    def __init__(self, config: base.ConstrainedModuleConfig) -> None:
         super().__init__(config)
         # self.tracker = tracker
         self.H = torch.nn.Parameter(torch.zeros((self.nz, self.nx)))

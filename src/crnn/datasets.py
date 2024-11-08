@@ -2,7 +2,7 @@ from typing import Dict, List, Tuple
 
 import numpy as np
 from numpy.typing import NDArray
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import DataLoader, Dataset
 
 
 class RecurrentWindowHorizonDataset(Dataset):
@@ -43,14 +43,14 @@ class RecurrentWindowHorizonDataset(Dataset):
         for ds, es in zip(d_seqs, e_seqs):
             n_samples = int(ds.shape[0] / (self.w + self.h + 1))
 
-            d_init = np.zeros((n_samples, self.w, self.nd+self.ne), dtype=np.float64)
+            d_init = np.zeros((n_samples, self.w, self.nd + self.ne), dtype=np.float64)
             e_init = np.zeros((n_samples, self.w, self.ne), dtype=np.float64)
 
             d = np.zeros((n_samples, self.h, self.nd), dtype=np.float64)
             e = np.zeros((n_samples, self.h, self.ne), dtype=np.float64)
 
             for idx in range(n_samples):
-                time = idx * (self.h + self.w +1)
+                time = idx * (self.h + self.w + 1)
 
                 # inputs
                 d_init[idx, :, :] = np.hstack(
@@ -88,6 +88,7 @@ class RecurrentWindowHorizonDataset(Dataset):
             "e": self.e[idx],
         }
 
+
 class RecurrentWindowDataset(Dataset):
     def __init__(
         self,
@@ -110,15 +111,13 @@ class RecurrentWindowDataset(Dataset):
         d_seq = list()
         e_seq = list()
         for ds, es in zip(d_seqs, e_seqs):
-            n_samples = int((ds.shape[0]) / (self.w+1))
+            n_samples = int((ds.shape[0]) / (self.w + 1))
 
             d = np.zeros(
                 (n_samples, self.w, self.n_d + self.n_e),
                 dtype=np.float64,
             )
-            e = np.zeros(
-                (n_samples, self.w, self.n_e), dtype=np.float64
-            )
+            e = np.zeros((n_samples, self.w, self.n_e), dtype=np.float64)
 
             for idx in range(n_samples):
                 time = idx * self.w
@@ -140,26 +139,28 @@ class RecurrentWindowDataset(Dataset):
         return self.d.shape[0]
 
     def __getitem__(self, idx: int) -> Dict[str, NDArray[np.float64]]:
-        return {'d': self.d[idx], 'e': self.e[idx]}
+        return {"d": self.d[idx], "e": self.e[idx]}
 
 
-def get_datasets(        
+def get_datasets(
     input_seqs: List[NDArray[np.float64]],
     output_seqs: List[NDArray[np.float64]],
     horizon: int,
     window: int,
 ) -> Tuple[Dataset]:
     return (
-        RecurrentWindowDataset(input_seqs,output_seqs,horizon,window),
-        RecurrentWindowHorizonDataset(input_seqs,output_seqs,horizon,window)
+        RecurrentWindowDataset(input_seqs, output_seqs, horizon, window),
+        RecurrentWindowHorizonDataset(input_seqs, output_seqs, horizon, window),
     )
+
+
 def get_loaders(
-    datasets:Tuple[Dataset],
+    datasets: Tuple[Dataset],
     batch_size: int,
     drop_last: bool = True,
-    shuffle: bool = True
-)-> Tuple[DataLoader]:
-    return (DataLoader(
-        dataset, batch_size, drop_last=drop_last, shuffle=shuffle
-    ) for dataset in datasets)
-    
+    shuffle: bool = True,
+) -> Tuple[DataLoader]:
+    return (
+        DataLoader(dataset, batch_size, drop_last=drop_last, shuffle=shuffle)
+        for dataset in datasets
+    )

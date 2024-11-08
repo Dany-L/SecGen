@@ -1,20 +1,21 @@
 import dataclasses
+import json
 import os
 import time
 from datetime import datetime
-from typing import List, Literal, Optional, Union, Dict
+from typing import Dict, List, Literal, Optional, Union
 
 import numpy as np
 from matplotlib.figure import Figure
 from numpy.typing import NDArray
 
-from .configuration import FIG_FOLDER_NAME, ExperimentBaseConfig, DynamicIdentificationConfig, NormalizationParameters
+from .configuration import (FIG_FOLDER_NAME, DynamicIdentificationConfig,
+                            ExperimentBaseConfig, NormalizationParameters)
 from .data_io import (save_model, save_model_parameter, save_sequences_to_mat,
                       write_config)
 from .models.base import ConstrainedModule
 from .utils import base as utils
 from .utils import plot
-import json
 
 
 @dataclasses.dataclass
@@ -76,6 +77,7 @@ class SaveNormalization(Event):
     input: NormalizationParameters
     output: NormalizationParameters
 
+
 @dataclasses.dataclass
 class SaveEvaluation(Event):
     results: Dict[str, float]
@@ -122,7 +124,9 @@ class BaseTracker:
             )
         elif isinstance(event, SaveModel):
             save_model(
-                event.model, self.directory, utils.get_model_file_name(event.name, self.model_name)
+                event.model,
+                self.directory,
+                utils.get_model_file_name(event.name, self.model_name),
             )
             self.write_to_logfile(
                 f"Save model to {utils.get_model_file_name(event.name, self.model_name)} in {self.directory}"
@@ -145,11 +149,19 @@ class BaseTracker:
         elif isinstance(event, SaveConfig):
             write_config(
                 event.config,
-                os.path.join(self.directory, utils.get_config_file_name(event.name, self.model_name)),
+                os.path.join(
+                    self.directory,
+                    utils.get_config_file_name(event.name, self.model_name),
+                ),
             )
             self.write_to_logfile(f"Save model config json file to {self.directory}")
         elif isinstance(event, SaveEvaluation):
-            with open(os.path.join(self.directory, f"evaluate-{self.model_name}-{event.mode}.json"), "w") as f:
+            with open(
+                os.path.join(
+                    self.directory, f"evaluate-{self.model_name}-{event.mode}.json"
+                ),
+                "w",
+            ) as f:
                 json.dump(event.results, f)
             self.write_to_logfile(f"Save evaluation results to {self.directory}")
         else:
@@ -159,5 +171,3 @@ class BaseTracker:
         with open(self.log_file_path, "a") as f:
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             f.write(f"{timestamp} - {msg}\n")
-
-    

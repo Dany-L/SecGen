@@ -5,9 +5,6 @@ import torch
 from numpy.typing import NDArray
 
 
-
-
-
 def bmat(mat: List[List[NDArray[np.float64]]]) -> NDArray[np.float64]:
     mat_list = []
     for col in mat:

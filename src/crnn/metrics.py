@@ -1,22 +1,24 @@
 from abc import abstractmethod
-from typing import List, Type, Dict
-from pydantic import BaseModel
+from typing import List, Type
 
 import numpy as np
 from numpy.typing import NDArray
+from pydantic import BaseModel
 
 
 class MetricConfig(BaseModel):
     pass
 
+
 class Metrics:
     CONFIG: Type[MetricConfig] = MetricConfig
+
     def __init__(self, config: MetricConfig):
         pass
 
     @abstractmethod
-    def forward(self,
-        es: List[NDArray[np.float64]], e_hats: List[NDArray[np.float64]]
+    def forward(
+        self, es: List[NDArray[np.float64]], e_hats: List[NDArray[np.float64]]
     ) -> np.float64:
         pass
 
@@ -25,8 +27,8 @@ class Rmse(Metrics):
     def __init__(self, config: MetricConfig):
         pass
 
-    def forward(self,
-        es: List[NDArray[np.float64]], e_hats: List[NDArray[np.float64]]
+    def forward(
+        self, es: List[NDArray[np.float64]], e_hats: List[NDArray[np.float64]]
     ) -> np.float64:
         M = len(es)
         h, ne = es[0].shape
@@ -39,8 +41,8 @@ class Rmse(Metrics):
 
 def retrieve_metric_class(metric_class_string: str) -> Type[Metrics]:
     # https://stackoverflow.com/a/452981
-    parts = metric_class_string.split('.')
-    module_string = '.'.join(parts[:-1])
+    parts = metric_class_string.split(".")
+    module_string = ".".join(parts[:-1])
     module = __import__(module_string)
 
     cls = getattr(module, parts[1])
@@ -49,5 +51,5 @@ def retrieve_metric_class(metric_class_string: str) -> Type[Metrics]:
             cls = getattr(cls, component)
 
     if not issubclass(cls, Metrics):
-        raise ValueError(f'{cls} is not a subclass of Metrics.')
+        raise ValueError(f"{cls} is not a subclass of Metrics.")
     return cls  # type: ignore

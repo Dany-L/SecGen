@@ -1,5 +1,5 @@
 import os
-from typing import List, Literal, Optional, Tuple, Union
+from typing import List, Literal, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -7,8 +7,9 @@ import torch
 from numpy.typing import NDArray
 from scipy.io import savemat
 
-from .configuration import (DATASET_DIR_ENV_VAR, RESULT_DIR_ENV_VAR, Normalization, NormalizationParameters,
-                            ExperimentBaseConfig, DynamicIdentificationConfig)
+from .configuration import (DATASET_DIR_ENV_VAR,
+                            DynamicIdentificationConfig, ExperimentBaseConfig,
+                            Normalization, NormalizationParameters)
 from .models.base import ConstrainedModule
 
 
@@ -16,7 +17,7 @@ def load_data(
     input_names: List[str],
     output_names: List[str],
     type: Literal["train", "test", "validation"],
-    dataset_dir: str
+    dataset_dir: str,
 ) -> Tuple[List[NDArray[np.float64]], List[NDArray[np.float64]]]:
     """
     Load data from CSV files in the specified type directory ('train', 'test', 'validation').
@@ -75,8 +76,10 @@ def load_file(
     return (input_data, output_data)
 
 
-def get_result_directory_name(directory:str, model_name: str, experiment_name:str) -> str:
-    result_directory = os.path.join(directory, f'{experiment_name}-{model_name}')
+def get_result_directory_name(
+    directory: str, model_name: str, experiment_name: str
+) -> str:
+    result_directory = os.path.join(directory, f"{experiment_name}-{model_name}")
     os.makedirs(result_directory, exist_ok=True)
     return result_directory
 
@@ -110,7 +113,9 @@ def save_sequences_to_mat(
     savemat(f"{file_name}.mat", {"e_hat": np.array(e_hats), "e": np.array(es)})
 
 
-def write_config(config: Union[ExperimentBaseConfig,DynamicIdentificationConfig], file_name: str) -> None:
+def write_config(
+    config: Union[ExperimentBaseConfig, DynamicIdentificationConfig], file_name: str
+) -> None:
     with open(file_name, "w") as f:
         f.write(config.model_dump_json())
 

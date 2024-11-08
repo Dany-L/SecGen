@@ -1,16 +1,17 @@
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from typing import Callable, List, Literal, Optional, Tuple, Union
 
 import cvxpy as cp
 import numpy as np
 import torch
 import torch.nn as nn
-from dataclasses import dataclass
-
-from ..utils import transformation as trans
 from pydantic import BaseModel
 
+from ..utils import transformation as trans
+
 # from .. import tracker as base_tracker
+
 
 @dataclass
 class LureSystemClass:
@@ -25,10 +26,12 @@ class LureSystemClass:
     D22: torch.Tensor
     Delta: torch.nn.Module
 
+
 class DynamicIdentificationConfig(BaseModel):
     nd: int
     ne: int
     nz: int
+
 
 def get_lure_matrices(
     gen_plant: torch.Tensor,
@@ -50,18 +53,16 @@ def get_lure_matrices(
     D22 = gen_plant[nx + ne :, nx + nd :]
 
     return LureSystemClass(A, B, B2, C, D, D12, C2, D21, D22, nonlinearity)
+
+
 class DynamicIdentificationModel(nn.Module, ABC):
 
-    def __init__(
-        self,
-        config: DynamicIdentificationConfig
-    ) -> None:
+    def __init__(self, config: DynamicIdentificationConfig) -> None:
         super().__init__()
         self.nz, self.nw = config.nz, config.nz  # size of nonlinear channel
         # internal state size matches size of nonlinear channel for this network
-        self.nx = self.nz  
+        self.nx = self.nz
         self.nd, self.ne = config.nd, config.ne  # size of input and output
-
 
     @abstractmethod
     def add_semidefinite_constraints(self, constraints=List[Callable]) -> None:
@@ -93,10 +94,6 @@ class DynamicIdentificationModel(nn.Module, ABC):
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         pass
 
-    @abstractmethod
-    def initialize_parameters(self) -> None:
-        pass
-
     def check_constraints(self) -> bool:
         return True
 
@@ -104,15 +101,14 @@ class DynamicIdentificationModel(nn.Module, ABC):
     def project_parameters(self) -> None:
         pass
 
+
 class ConstrainedModuleConfig(DynamicIdentificationConfig):
     sdp_opt: str = cp.MOSEK
     nonlinearity: Literal["tanh", "relu", "deadzone", "sat"] = "tanh"
 
+
 class ConstrainedModule(DynamicIdentificationModel):
-    def __init__(
-        self,
-        config: ConstrainedModuleConfig
-    ) -> None:
+    def __init__(self, config: ConstrainedModuleConfig) -> None:
         super().__init__(config)
 
         self.nl: Optional[nn.Module] = None

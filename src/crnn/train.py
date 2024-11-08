@@ -1,24 +1,21 @@
 from typing import Literal, Optional, Tuple
 
+import numpy as np
 import torch
 from torch import nn
 from torch.optim import Optimizer
 from torch.utils.data import DataLoader
 
-from . import tracker as base_tracker
-from .models import base
-from .utils import plot
-
-from torch.utils.data import DataLoader
-
 from . import configuration as cfg
-from .utils import base as utils
+from . import tracker as base_tracker
 from .data_io import get_result_directory_name, load_data
 from .datasets import RecurrentWindowHorizonDataset, get_datasets, get_loaders
 from .loss import get_loss_function
+from .models import base
 from .models.model_io import get_model_from_config
 from .optimizer import get_optimizer
-import numpy as np
+from .utils import base as utils
+from .utils import plot
 
 
 def train(
@@ -28,15 +25,20 @@ def train(
     model_name: str,
     experiment_name: str,
 ) -> None:
-    result_directory = get_result_directory_name(result_base_directory, model_name, experiment_name)
+    result_directory = get_result_directory_name(
+        result_base_directory, model_name, experiment_name
+    )
     tracker = base_tracker.BaseTracker(result_directory, model_name)
-    
+
     config = cfg.load_configuration(config_file_name)
     experiment_config = config.experiments[experiment_name]
     model_config = config.models[model_name]
 
     train_inputs, train_outputs = load_data(
-        experiment_config.input_names, experiment_config.output_names, "train", dataset_dir
+        experiment_config.input_names,
+        experiment_config.output_names,
+        "train",
+        dataset_dir,
     )
     input_mean, input_std = utils.get_mean_std(train_inputs)
     output_mean, output_std = utils.get_mean_std(train_outputs)
@@ -58,12 +60,15 @@ def train(
         and np.std(np.vstack(n_train_outputs)) - 1 < 1e-5
     )
 
-    loaders = get_loaders(get_datasets(
-        n_train_inputs,
-        n_train_outputs,
-        experiment_config.horizons.training,
-        experiment_config.window,
-    ),experiment_config.batch_size)
+    loaders = get_loaders(
+        get_datasets(
+            n_train_inputs,
+            n_train_outputs,
+            experiment_config.horizons.training,
+            experiment_config.window,
+        ),
+        experiment_config.batch_size,
+    )
 
     initializer, predictor = get_model_from_config(model_config)
     predictor.add_semidefinite_constraints()
@@ -108,8 +113,9 @@ def train(
     if initializer is not None:
         tracker.track(base_tracker.SaveModel("", initializer, "initializer"))
     tracker.track(base_tracker.SaveModelParameter("", predictor))
-    tracker.track(base_tracker.SaveConfig("",'experiment', experiment_config))
-    tracker.track(base_tracker.SaveConfig("", 'model', model_config.parameters))
+    tracker.track(base_tracker.SaveConfig("", "experiment", experiment_config))
+    tracker.track(base_tracker.SaveConfig("", "model", model_config.parameters))
+
 
 def train_joint(
     models: Tuple[base.ConstrainedModule],

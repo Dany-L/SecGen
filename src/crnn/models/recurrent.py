@@ -1,19 +1,21 @@
-from typing import Callable, List, Literal, Optional, Tuple, Union
+from typing import Callable, List, Literal, Optional, Tuple
 
 import torch
 
-from .. import tracker as base_tracker
-from .base import DynamicIdentificationModel, DynamicIdentificationConfig
+from .base import DynamicIdentificationConfig, DynamicIdentificationModel
 
 
 class BasicRnnConfig(DynamicIdentificationConfig):
     num_layers: int = 5
-    nonlinearity: Literal['tanh', 'relu']
+    nonlinearity: Literal["tanh", "relu"]
+
+
 class BasicRnn(DynamicIdentificationModel):
     CONFIG = BasicRnnConfig
+
     def __init__(
         self,
-        config: BasicRnnConfig
+        config: BasicRnnConfig,
         # tracker: base_tracker.BaseTracker = base_tracker.BaseTracker(),
     ) -> None:
         super().__init__(config)
@@ -25,7 +27,9 @@ class BasicRnn(DynamicIdentificationModel):
             num_layers=config.num_layers,
             batch_first=True,
         )
-        self.output_layer = torch.nn.Linear(in_features=config.nz, out_features=config.ne)
+        self.output_layer = torch.nn.Linear(
+            in_features=config.nz, out_features=config.ne
+        )
         # self.tracker = tracker
 
     def forward(
@@ -50,15 +54,16 @@ class BasicRnn(DynamicIdentificationModel):
     def project_parameters(self) -> None:
         pass
 
+
 class BasicLstmConfig(DynamicIdentificationConfig):
     dropout: float = 0.25
     num_layers: int = 5
+
+
 class BasicLstm(DynamicIdentificationModel):
     CONFIG = BasicLstmConfig
-    def __init__(
-        self,
-        config: BasicLstmConfig
-    ) -> None:
+
+    def __init__(self, config: BasicLstmConfig) -> None:
         super().__init__(config)
         self.num_layers = config.num_layers
         self.lstm_layer = torch.nn.LSTM(
