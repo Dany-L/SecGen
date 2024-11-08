@@ -166,3 +166,4 @@ cython_debug/
 playground.py
 */*run.sh
 env
+**_tmp/*

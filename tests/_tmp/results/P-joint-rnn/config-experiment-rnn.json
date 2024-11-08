@@ -1,1 +1,0 @@
-{"epochs":5,"eps":0.001,"optimizer":{"name":"adam","learning_rate":0.0025},"num_layer":3,"dt":0.01,"nz":4,"batch_size":4,"window":10,"loss_function":"mse","input_names":["u_1"],"output_names":["y_1"],"horizons":{"training":40,"testing":100},"initial_hidden_state":"joint"}
