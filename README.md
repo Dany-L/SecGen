@@ -1,5 +1,8 @@
 Recurrent neural networks for system identification with quadratic constraints. In this package we evaluate the use of generalized sector conditions and how they can be used in system identification.
 
+## ```deepsysid````
+The configuration was used from [deepsysid][https://github.com/AlexandraBaier/deepsysid]. In contrast to ```deepsysid``` in this work we wanted to pull out the training, simulation, saving, loading, ... functionality out of the models and therefore started a new project.
+
 ## Environment variables
 ```
 DATASET_DIRECTORY # The folder contains the subfolders train, test and validation

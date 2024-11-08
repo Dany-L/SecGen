@@ -29,3 +29,9 @@ def get_mean_std(
 ) -> Tuple[NDArray[np.float64], NDArray[np.float64]]:
     data = np.concatenate(data, axis=0)
     return np.mean(data, axis=0), np.std(data, axis=0)
+
+def get_model_file_name(name: str, model_name:str) -> str:
+    return f"parameters-{name}-{model_name}.pth"
+
+def get_config_file_name(name: str, model_name:str) -> str:
+    return f'config-{name}-{model_name}.json'

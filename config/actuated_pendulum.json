@@ -1,0 +1,76 @@
+{
+    "settings": {
+        "experiment_base_name": "P",
+        "metrics":{
+            "rmse":{
+                "metric_class": "crnn.metrics.Rmse",
+                "parameters":{
+                }
+            }
+        },
+        "static_parameters":{
+            "epochs": 5,
+            "eps": 1e-3,
+            "dt": 0.01,
+            "optimizer": {
+                "name": "adam",
+                "learning_rate": 0.0025
+            },
+            "num_layer": 3,
+            "nz": 16,
+            "batch_size": 64,
+            "window": 40,
+            "loss_function": "mse",
+            "horizons":{
+                "training": 50,
+                "testing": 800
+            },
+            "input_names":[
+                "u_1"
+            ],
+            "output_names":[
+                "y_1"
+            ]
+        },
+        "flexible_parameters":{
+            "initial_hidden_state":[
+                "separate",
+                "zero",
+                "joint"
+            ]
+        }
+
+    },
+    "models": [
+        {
+            "m_short_name": "lstm",
+            "m_class": "crnn.models.recurrent.BasicLstm",
+            "parameters": {
+                "dropout": 0.25,
+                "num_layers": 5
+            }
+        },
+        {
+            "m_short_name" : "rnn",
+            "m_class": "crnn.models.recurrent.BasicRnn",
+            "parameters": {
+                "num_layers": 5,
+                "nonlinearity": "tanh"
+            }
+        },
+        {
+            "m_short_name" : "tanh",
+            "m_class": "crnn.models.sector_bounded.SectorBoundedLtiRnn",
+            "parameters": {
+                "nonlinearity": "tanh"
+            }
+        },
+        {
+            "m_short_name" : "dznGen",
+            "m_class": "crnn.models.sector_bounded.GeneralSectorBoundedLtiRnn",
+            "parameters": {
+                "nonlinearity": "deadzone"
+            }
+        }
+    ]
+}

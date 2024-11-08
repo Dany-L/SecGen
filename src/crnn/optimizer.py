@@ -3,14 +3,16 @@ from typing import Iterable, Optional, Tuple
 import torch
 import torch.optim as opt
 
-from .configuration import OptimizerConfig
+from .configuration import ExperimentBaseConfig
 
 
 def get_optimizer(
-    opt_config: OptimizerConfig, params: Tuple[Iterable[torch.Tensor]]
+    config: ExperimentBaseConfig, params: Tuple[Iterable[torch.Tensor]]
 ) -> Tuple[Optional[opt.Optimizer]]:
     optimizers: Optional[Tuple[opt.Optimizer]] = None
-    if opt_config.initial_hidden_state == "joint":
+    opt_config = config.optimizer
+    initial_hidden_state = config.initial_hidden_state
+    if initial_hidden_state == "joint":
         params_list = []
         for param in params:
             params_list += list(param)

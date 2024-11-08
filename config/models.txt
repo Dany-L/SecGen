@@ -1,0 +1,4 @@
+lstm
+rnn
+tanh
+dznGen

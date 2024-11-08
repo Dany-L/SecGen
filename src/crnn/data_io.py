@@ -1,5 +1,5 @@
 import os
-from typing import List, Literal, Optional, Tuple
+from typing import List, Literal, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -7,8 +7,8 @@ import torch
 from numpy.typing import NDArray
 from scipy.io import savemat
 
-from .configuration import (DATASET_DIR_ENV_VAR, RESULT_DIR_ENV_VAR,
-                            BaseConfig, Normalization, NormalizationParameters)
+from .configuration import (DATASET_DIR_ENV_VAR, RESULT_DIR_ENV_VAR, Normalization, NormalizationParameters,
+                            ExperimentBaseConfig, DynamicIdentificationConfig)
 from .models.base import ConstrainedModule
 
 
@@ -16,6 +16,7 @@ def load_data(
     input_names: List[str],
     output_names: List[str],
     type: Literal["train", "test", "validation"],
+    dataset_dir: str
 ) -> Tuple[List[NDArray[np.float64]], List[NDArray[np.float64]]]:
     """
     Load data from CSV files in the specified type directory ('train', 'test', 'validation').
@@ -29,7 +30,6 @@ def load_data(
     Tuple[List[NDArray[np.float64]], List[NDArray[np.float64]]]: A Tuple containing two lists of NumPy arrays,
     one for the input columns and one for the output columns, from all CSV files in the specified type directory.
     """
-    dataset_dir: Optional[str] = os.path.expanduser(os.getenv(DATASET_DIR_ENV_VAR))
     if not dataset_dir:
         raise ValueError(f"Environment variable {DATASET_DIR_ENV_VAR} is not set.")
 
@@ -75,23 +75,10 @@ def load_file(
     return (input_data, output_data)
 
 
-def get_result_directory_name(model_name: str) -> str:
-    directory = os.path.expanduser(os.getenv(RESULT_DIR_ENV_VAR))
-    return os.path.join(directory, model_name)
-
-
-def create_result_directory(model_name: str) -> str:
-    """
-    Create a subdirectory in the directory specified by the RESULT_DIR_ENV_VAR environment variable.
-
-    Args:
-        directory_name (str): The name of the subdirectory to create.
-
-    Returns:
-        str: The path to the created subdirectory.
-    """
-    os.makedirs(get_result_directory_name(model_name), exist_ok=True)
-    return get_result_directory_name(model_name)
+def get_result_directory_name(directory:str, model_name: str, experiment_name:str) -> str:
+    result_directory = os.path.join(directory, f'{experiment_name}-{model_name}')
+    os.makedirs(result_directory, exist_ok=True)
+    return result_directory
 
 
 def save_model(model: ConstrainedModule, directory_name: str, file_name: str) -> None:
@@ -123,7 +110,7 @@ def save_sequences_to_mat(
     savemat(f"{file_name}.mat", {"e_hat": np.array(e_hats), "e": np.array(es)})
 
 
-def write_config(config: BaseConfig, file_name: str) -> None:
+def write_config(config: Union[ExperimentBaseConfig,DynamicIdentificationConfig], file_name: str) -> None:
     with open(file_name, "w") as f:
         f.write(config.model_dump_json())
 

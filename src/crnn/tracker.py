@@ -2,18 +2,19 @@ import dataclasses
 import os
 import time
 from datetime import datetime
-from typing import List, Literal, Optional
+from typing import List, Literal, Optional, Union, Dict
 
 import numpy as np
 from matplotlib.figure import Figure
 from numpy.typing import NDArray
 
-from .configuration import FIG_FOLDER_NAME, BaseConfig, NormalizationParameters
+from .configuration import FIG_FOLDER_NAME, ExperimentBaseConfig, DynamicIdentificationConfig, NormalizationParameters
 from .data_io import (save_model, save_model_parameter, save_sequences_to_mat,
                       write_config)
 from .models.base import ConstrainedModule
 from .utils import base as utils
 from .utils import plot
+import json
 
 
 @dataclasses.dataclass
@@ -66,13 +67,19 @@ class SaveModelParameter(ModelEvent):
 
 @dataclasses.dataclass
 class SaveConfig(Event):
-    config: BaseConfig
+    name: str
+    config: Union[ExperimentBaseConfig, DynamicIdentificationConfig]
 
 
 @dataclasses.dataclass
 class SaveNormalization(Event):
     input: NormalizationParameters
     output: NormalizationParameters
+
+@dataclasses.dataclass
+class SaveEvaluation(Event):
+    results: Dict[str, float]
+    mode: Literal["test", "validation"]
 
 
 class BaseTracker:
@@ -115,10 +122,10 @@ class BaseTracker:
             )
         elif isinstance(event, SaveModel):
             save_model(
-                event.model, self.directory, self.get_model_file_name(event.name)
+                event.model, self.directory, utils.get_model_file_name(event.name, self.model_name)
             )
             self.write_to_logfile(
-                f"Save model to {self.get_model_file_name(event.name)} in {self.directory}"
+                f"Save model to {utils.get_model_file_name(event.name, self.model_name)} in {self.directory}"
             )
         elif isinstance(event, SaveModelParameter):
             save_model_parameter(
@@ -138,9 +145,13 @@ class BaseTracker:
         elif isinstance(event, SaveConfig):
             write_config(
                 event.config,
-                os.path.join(self.directory, f"config-{self.model_name}.json"),
+                os.path.join(self.directory, utils.get_config_file_name(event.name, self.model_name)),
             )
             self.write_to_logfile(f"Save model config json file to {self.directory}")
+        elif isinstance(event, SaveEvaluation):
+            with open(os.path.join(self.directory, f"evaluate-{self.model_name}-{event.mode}.json"), "w") as f:
+                json.dump(event.results, f)
+            self.write_to_logfile(f"Save evaluation results to {self.directory}")
         else:
             raise ValueError(f"Event is not defined {event}")
 
@@ -149,5 +160,4 @@ class BaseTracker:
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             f.write(f"{timestamp} - {msg}\n")
 
-    def get_model_file_name(self, name: str) -> str:
-        return f"parameters-{name}-{self.model_name}.pth"
+    

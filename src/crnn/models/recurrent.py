@@ -3,30 +3,30 @@ from typing import Callable, List, Literal, Optional, Tuple, Union
 import torch
 
 from .. import tracker as base_tracker
-from .base import DynamicIdentificationModel
+from .base import DynamicIdentificationModel, DynamicIdentificationConfig
 
 
+class BasicRnnConfig(DynamicIdentificationConfig):
+    num_layers: int = 5
+    nonlinearity: Literal['tanh', 'relu']
 class BasicRnn(DynamicIdentificationModel):
+    CONFIG = BasicRnnConfig
     def __init__(
         self,
-        nd: int,
-        ne: int,
-        nz: int,
-        num_layers: int = 5,
-        nonlinearity: Literal["tanh", "relu"] = "tanh",
-        tracker: base_tracker.BaseTracker = base_tracker.BaseTracker(),
+        config: BasicRnnConfig
+        # tracker: base_tracker.BaseTracker = base_tracker.BaseTracker(),
     ) -> None:
-        super().__init__(nd, ne, nz, nonlinearity)
-        self.num_layers = num_layers
+        super().__init__(config)
+        self.num_layers = config.num_layers
         self.rnn_layer = torch.nn.RNN(
-            input_size=nd,
-            hidden_size=nz,
-            num_layers=num_layers,
-            nonlinearity=nonlinearity,
+            input_size=config.nd,
+            hidden_size=config.nz,
+            nonlinearity=config.nonlinearity,
+            num_layers=config.num_layers,
             batch_first=True,
         )
-        self.output_layer = torch.nn.Linear(in_features=nz, out_features=ne)
-        self.tracker = tracker
+        self.output_layer = torch.nn.Linear(in_features=config.nz, out_features=config.ne)
+        # self.tracker = tracker
 
     def forward(
         self, d: torch.Tensor, x0: Optional[torch.Tensor] = None
@@ -50,29 +50,26 @@ class BasicRnn(DynamicIdentificationModel):
     def project_parameters(self) -> None:
         pass
 
-
+class BasicLstmConfig(DynamicIdentificationConfig):
+    dropout: float = 0.25
+    num_layers: int = 5
 class BasicLstm(DynamicIdentificationModel):
+    CONFIG = BasicLstmConfig
     def __init__(
         self,
-        nd: int,
-        ne: int,
-        nz: int,
-        num_layers: int = 5,
-        dropout: float = 0.25,
-        nonlinearity: Literal["tanh", "relu"] = "tanh",
-        tracker: base_tracker.BaseTracker = base_tracker.BaseTracker(),
+        config: BasicLstmConfig
     ) -> None:
-        super().__init__(nd, ne, nz, nonlinearity)
-        self.num_layers = num_layers
+        super().__init__(config)
+        self.num_layers = config.num_layers
         self.lstm_layer = torch.nn.LSTM(
-            input_size=nd,
-            hidden_size=nz,
-            num_layers=num_layers,
+            input_size=config.nd,
+            hidden_size=config.nz,
+            num_layers=config.num_layers,
             batch_first=True,
-            dropout=dropout,
+            dropout=config.dropout,
         )
-        self.output_layer = torch.nn.Linear(in_features=nz, out_features=ne)
-        self.tracker = tracker
+        self.output_layer = torch.nn.Linear(in_features=self.nz, out_features=self.ne)
+        # self.tracker = tracker
         for name, param in self.lstm_layer.named_parameters():
             if "weight" in name:
                 torch.nn.init.xavier_normal_(param)

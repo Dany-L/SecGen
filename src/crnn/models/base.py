@@ -5,39 +5,63 @@ import cvxpy as cp
 import numpy as np
 import torch
 import torch.nn as nn
+from dataclasses import dataclass
 
-from ..configuration import LureSystemClass
 from ..utils import transformation as trans
+from pydantic import BaseModel
 
 # from .. import tracker as base_tracker
 
+@dataclass
+class LureSystemClass:
+    A: torch.Tensor
+    B: torch.Tensor
+    B2: torch.Tensor
+    C: torch.Tensor
+    D: torch.Tensor
+    D12: torch.Tensor
+    C2: torch.Tensor
+    D21: torch.Tensor
+    D22: torch.Tensor
+    Delta: torch.nn.Module
 
+class DynamicIdentificationConfig(BaseModel):
+    nd: int
+    ne: int
+    nz: int
+
+def get_lure_matrices(
+    gen_plant: torch.Tensor,
+    nx: int,  # state
+    nd: int,  # input
+    ne: int,  # output
+    nonlinearity: Optional[torch.nn.Module] = torch.nn.Tanh(),
+) -> LureSystemClass:
+    A = gen_plant[:nx, :nx]
+    B = gen_plant[:nx, nx : nx + nd]
+    B2 = gen_plant[:nx, nx + nd :]
+
+    C = gen_plant[nx : nx + ne, :nx]
+    D = gen_plant[nx : nx + ne, nx : nx + nd]
+    D12 = gen_plant[nx : nx + ne, nx + nd :]
+
+    C2 = gen_plant[nx + ne :, :nx]
+    D21 = gen_plant[nx + ne :, nx : nx + nd]
+    D22 = gen_plant[nx + ne :, nx + nd :]
+
+    return LureSystemClass(A, B, B2, C, D, D12, C2, D21, D22, nonlinearity)
 class DynamicIdentificationModel(nn.Module, ABC):
 
     def __init__(
         self,
-        nd: int,
-        ne: int,
-        nz: int,
-        nonlinearity: Literal["tanh", "relu", "deadzone", "sat"] = "tanh",
+        config: DynamicIdentificationConfig
     ) -> None:
-        super(DynamicIdentificationModel, self).__init__()
-        self.nz, self.nw = nz, nz  # size of nonlinear channel
-        self.nx = (
-            self.nz
-        )  # internal state size matches size of nonlinear channel for this network
-        self.nd, self.ne = nd, ne  # size of input and output
-        self.nl: Optional[nn.Module] = None
-        if nonlinearity == "tanh":
-            self.nl = nn.Tanh()
-        elif nonlinearity == "relu":
-            self.nl = nn.ReLU()
-        elif nonlinearity == "deadzone":
-            self.nl = nn.Softshrink()
-        elif nonlinearity == "sat":
-            self.nl = nn.Hardtanh()
-        else:
-            raise ValueError(f"Unsupported nonlinearity: {nonlinearity}")
+        super().__init__()
+        self.nz, self.nw = config.nz, config.nz  # size of nonlinear channel
+        # internal state size matches size of nonlinear channel for this network
+        self.nx = self.nz  
+        self.nd, self.ne = config.nd, config.ne  # size of input and output
+
 
     @abstractmethod
     def add_semidefinite_constraints(self, constraints=List[Callable]) -> None:
@@ -53,14 +77,13 @@ class DynamicIdentificationModel(nn.Module, ABC):
 
     def set_lure_system(self) -> LureSystemClass:
         return LureSystem(
-            trans.get_lure_matrices(
+            get_lure_matrices(
                 torch.zeros(
-                    size=(self.nx + self.nd + self.nw, self.nx + self.ne + self.nz)
+                    size=(self.nx + self.ne + self.nw, self.nx + self.nd + self.nz)
                 ),
                 self.nx,
                 self.nd,
                 self.ne,
-                self.nl,
             )
         )
 
@@ -81,18 +104,30 @@ class DynamicIdentificationModel(nn.Module, ABC):
     def project_parameters(self) -> None:
         pass
 
+class ConstrainedModuleConfig(DynamicIdentificationConfig):
+    sdp_opt: str = cp.MOSEK
+    nonlinearity: Literal["tanh", "relu", "deadzone", "sat"] = "tanh"
 
-class ConstrainedModule(DynamicIdentificationModel, nn.Module):
+class ConstrainedModule(DynamicIdentificationModel):
     def __init__(
         self,
-        nd: int,
-        ne: int,
-        nz: int,
-        optimizer: str = cp.MOSEK,
-        nonlinearity: Literal["tanh", "relu", "deadzone", "sat"] = "tanh",
+        config: ConstrainedModuleConfig
     ) -> None:
-        super(DynamicIdentificationModel, self).__init__(nd, ne, nz, nonlinearity)
-        self.optimizer = optimizer
+        super().__init__(config)
+
+        self.nl: Optional[nn.Module] = None
+        if config.nonlinearity == "tanh":
+            self.nl = nn.Tanh()
+        elif config.nonlinearity == "relu":
+            self.nl = nn.ReLU()
+        elif config.nonlinearity == "deadzone":
+            self.nl = nn.Softshrink()
+        elif config.nonlinearity == "sat":
+            self.nl = nn.Hardtanh()
+        else:
+            raise ValueError(f"Unsupported nonlinearity: {config.nonlinearity}")
+
+        self.sdp_opt = config.sdp_opt
 
         self.semidefinite_constraints: List[Callable] = []
         self.pointwise_constraints: List[Callable] = []
@@ -129,7 +164,7 @@ class ConstrainedModule(DynamicIdentificationModel, nn.Module):
         theta = trans.torch_bmat(
             [[A, self.B, B2], [self.C, self.D, self.D12], [self.C2, self.D21, self.D22]]
         )
-        sys = trans.get_lure_matrices(theta, self.nx, self.nd, self.ne, self.nl)
+        sys = get_lure_matrices(theta, self.nx, self.nd, self.ne, self.nl)
         self.lure = LureSystem(sys)
 
         return sys

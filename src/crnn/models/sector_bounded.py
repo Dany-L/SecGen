@@ -7,20 +7,17 @@ import torch
 from .. import tracker as base_tracker
 from ..utils import transformation as trans
 from . import base
+from pydantic import BaseModel
 
 
 class SectorBoundedLtiRnn(base.ConstrainedModule):
+    CONFIG = base.ConstrainedModuleConfig
     def __init__(
         self,
-        nd: int,
-        ne: int,
-        nz: int,
-        optimizer: str = cp.MOSEK,
-        nonlinearity: Literal["tanh", "relu", "deadzone", "sat"] = "tanh",
-        tracker: base_tracker.BaseTracker = base_tracker.BaseTracker(),
+        config: base.ConstrainedModuleConfig
     ) -> None:
-        super().__init__(nz, nd, ne, optimizer, nonlinearity, tracker)
-        self.tracker = tracker
+        super().__init__(config)
+        # self.tracker = tracker
 
     def sdp_constraints(self) -> List[Callable]:
         def stability_lmi() -> torch.Tensor:
@@ -50,15 +47,15 @@ class SectorBoundedLtiRnn(base.ConstrainedModule):
         nM = M.shape[0]
         eps = 1e-3
         problem = cp.Problem(cp.Minimize([None]), [M << -eps * np.eye(nM)])
-        problem.solve(solver=self.optimizer)
+        problem.solve(solver=self.sdp_opt)
         if not problem.status == "optimal":
             ValueError(f"cvxpy did not find a solution. {problem.status}")
-        self.tracker.track(
-            base_tracker.Log(
-                "",
-                f"Feasible initial parameter set found, write back parameters, problem status {problem.status}",
-            )
-        )
+        # self.tracker.track(
+        #     base_tracker.Log(
+        #         "",
+        #         f"Feasible initial parameter set found, write back parameters, problem status {problem.status}",
+        #     )
+        # )
 
         self.A_tilde.data = torch.tensor(A_tilde.value)
         self.B2_tilde.data = torch.tensor(B2_tilde.value)
@@ -82,15 +79,15 @@ class SectorBoundedLtiRnn(base.ConstrainedModule):
         eps = 1e-3
         M0 = -self.sdp_constraints()[0]().detach().numpy()
         problem = cp.Problem(cp.Minimize(cp.norm(M0 - M)), [M << -eps * np.eye(nM)])
-        problem.solve(solver=self.optimizer)
+        problem.solve(solver=self.sdp_opt)
         if not problem.status == "optimal":
             ValueError(f"cvxpy did not find a solution. {problem.status}")
-        self.tracker.track(
-            base_tracker.Log(
-                "",
-                f"Project parameters to feasible set d: {np.linalg.norm(M0-M.value):.2f}, write back parameters, problem status {problem.status}",
-            )
-        )
+        # self.tracker.track(
+        #     base_tracker.Log(
+        #         "",
+        #         f"Project parameters to feasible set d: {np.linalg.norm(M0-M.value):.2f}, write back parameters, problem status {problem.status}",
+        #     )
+        # )
 
         self.A_tilde.data = torch.tensor(A_tilde.value)
         self.B2_tilde.data = torch.tensor(B2_tilde.value)
@@ -109,17 +106,13 @@ class SectorBoundedLtiRnn(base.ConstrainedModule):
 
 
 class GeneralSectorBoundedLtiRnn(base.ConstrainedModule):
+    CONFIG = base.ConstrainedModuleConfig
     def __init__(
         self,
-        nz: int,
-        nd: int,
-        ne: int,
-        optimizer: str = cp.MOSEK,
-        nonlinearity: Literal["deadzone", "sat"] = "deadzone",
-        tracker: base_tracker.BaseTracker = base_tracker.BaseTracker(),
+        config: base.ConstrainedModuleConfig
     ) -> None:
-        super().__init__(nz, nd, ne, optimizer, nonlinearity)
-        self.tracker = tracker
+        super().__init__(config)
+        # self.tracker = tracker
         self.H = torch.nn.Parameter(torch.zeros((self.nz, self.nx)))
 
     def initialize_parameters(self) -> None:
@@ -143,15 +136,15 @@ class GeneralSectorBoundedLtiRnn(base.ConstrainedModule):
             cp.Minimize([None]),
             [M << -eps * np.eye(nM), M_gen << -eps * np.eye(2 * self.nz)],
         )
-        problem.solve(solver=self.optimizer)
+        problem.solve(solver=self.sdp_opt)
         if not problem.status == "optimal":
             ValueError(f"cvxpy did not find a solution. {problem.status}")
-        self.tracker.track(
-            base_tracker.Log(
-                "",
-                f"Feasible initial parameter set found, write back parameters, problem status {problem.status}",
-            )
-        )
+        # self.tracker.track(
+        #     base_tracker.Log(
+        #         "",
+        #         f"Feasible initial parameter set found, write back parameters, problem status {problem.status}",
+        #     )
+        # )
 
         self.A_tilde.data = torch.tensor(A_tilde.value)
         self.B2_tilde.data = torch.tensor(B2_tilde.value)
@@ -202,15 +195,15 @@ class GeneralSectorBoundedLtiRnn(base.ConstrainedModule):
             cp.Minimize(cp.norm(M - M0) + cp.norm(M_gen - M_gen0)),
             [M << -eps * np.eye(nM), M_gen << -eps * np.eye(2 * self.nz)],
         )
-        problem.solve(solver=self.optimizer)
+        problem.solve(solver=self.sdp_opt)
         if not problem.status == "optimal":
             ValueError(f"cvxpy did not find a solution. {problem.status}")
-        self.tracker.track(
-            base_tracker.Log(
-                "",
-                f"Project parameters to feasible set d: {np.linalg.norm(M0-M.value):.2f}, write back parameters, problem status {problem.status}",
-            )
-        )
+        # self.tracker.track(
+        #     base_tracker.Log(
+        #         "",
+        #         f"Project parameters to feasible set d: {np.linalg.norm(M0-M.value):.2f}, write back parameters, problem status {problem.status}",
+        #     )
+        # )
 
         self.A_tilde.data = torch.tensor(A_tilde.value)
         self.B2_tilde.data = torch.tensor(B2_tilde.value)
