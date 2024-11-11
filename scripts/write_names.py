@@ -10,7 +10,7 @@ def main(directory:str)->None:
     config = ExperimentConfig.from_template(
         ExperimentTemplate(**config_dict)
     )
-    model_names = list(config.models.keys())
+    model_names = config.m_names
     with open(os.path.join(directory, 'models.txt'), mode='w') as f:
         f.write('\n'.join(model_names) + '\n')
 

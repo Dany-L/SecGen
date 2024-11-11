@@ -2,6 +2,7 @@ import os
 from typing import List, Literal, Tuple, Union
 
 import numpy as np
+import json
 import pandas as pd
 import torch
 from numpy.typing import NDArray
@@ -121,9 +122,10 @@ def write_config(
 
 
 def load_normalization(directory: str) -> Normalization:
-    normalization = np.load(
-        os.path.join(directory, "normalization.npz"), allow_pickle=True
-    )
+    with open(os.path.join(directory, "normalization.json"),
+                "r",
+            ) as f:
+        normalization = json.load(f)
     return Normalization(
         input=NormalizationParameters(
             mean=normalization["input_mean"], std=normalization["input_std"]

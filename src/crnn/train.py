@@ -32,7 +32,7 @@ def train(
 
     config = cfg.load_configuration(config_file_name)
     experiment_config = config.experiments[experiment_name]
-    model_config = config.models[model_name]
+    model_config = config.models[f'{experiment_name}-{model_name}']
 
     train_inputs, train_outputs = load_data(
         experiment_config.input_names,
@@ -71,7 +71,6 @@ def train(
     )
 
     initializer, predictor = get_model_from_config(model_config)
-    predictor.add_semidefinite_constraints()
 
     optimizers = get_optimizer(
         experiment_config, (initializer.parameters(), predictor.parameters())
@@ -130,7 +129,8 @@ def train_joint(
     opt_init, opt_pred = optimizers
     initializer.initialize_parameters()
     initializer.set_lure_system()
-    predictor.initialize_parameters()
+    problem_status = predictor.initialize_parameters()
+    tracker.track(base_tracker.Log("", f"Initialize parameters: {problem_status}"))
     predictor.set_lure_system()
     predictor.train()
     tracker.track(base_tracker.Start(""))
@@ -152,7 +152,7 @@ def train_joint(
             predictor.set_lure_system()
             initializer.set_lure_system()
             loss += batch_loss.item()
-        if epoch % 20 == 0:
+        if epoch % 50 == 0:
             fig = plot.plot_sequence(
                 [e_hat[0, :].detach().numpy(), batch["e"][0, :].detach().numpy()],
                 0.01,
@@ -162,7 +162,8 @@ def train_joint(
             tracker.track(base_tracker.SaveFig("", fig, f"e_{epoch}"))
 
         if not predictor.check_constraints():
-            predictor.project_parameters()
+            problem_status = predictor.project_parameters()
+            tracker.track(base_tracker.Log("", f"Projecting parameters: {problem_status}"))
             predictor.set_lure_system()
         tracker.track(base_tracker.Log("", f"{epoch}/{epochs}\t l= {loss:.2f}"))
     tracker.track(base_tracker.Stop(""))
@@ -196,7 +197,7 @@ def train_zero(
             opt_pred.step()
             predictor.set_lure_system()
             loss += batch_loss.item()
-        if epoch % 20 == 0:
+        if epoch % 50 == 0:
             fig = plot.plot_sequence(
                 [e_hat[0, :].detach().numpy(), batch["e"][0, :].detach().numpy()],
                 0.01,
@@ -206,7 +207,8 @@ def train_zero(
             tracker.track(base_tracker.SaveFig("", fig, f"e_{epoch}"))
 
         if not predictor.check_constraints():
-            predictor.project_parameters()
+            problem_status = predictor.project_parameters()
+            tracker.track(base_tracker.Log("", f"Projecting parameters: {problem_status}"))
             predictor.set_lure_system()
         tracker.track(base_tracker.Log("", f"{epoch}/{epochs}\t l= {loss:.2f}"))
     tracker.track(base_tracker.Stop(""))
@@ -228,7 +230,8 @@ def train_separate(
     initializer.initialize_parameters()
     initializer.set_lure_system()
     initializer.train()
-    predictor.initialize_parameters()
+    problem_status = predictor.initialize_parameters()
+    tracker.track(base_tracker.Log("", f"Initialize parameters: {problem_status}"))
     predictor.set_lure_system()
     predictor.train()
     tracker.track(base_tracker.Start(""))
@@ -264,7 +267,7 @@ def train_separate(
             predictor.set_lure_system()
             loss += batch_loss.item()
 
-        if epoch % 20 == 0:
+        if epoch % 50 == 0:
             fig = plot.plot_sequence(
                 [e_hat[0, :].detach().numpy(), batch["e"][0, :].detach().numpy()],
                 0.01,
@@ -274,7 +277,8 @@ def train_separate(
             tracker.track(base_tracker.SaveFig("", fig, f"e_{epoch}"))
 
         if not predictor.check_constraints():
-            predictor.project_parameters()
+            problem_status = predictor.project_parameters()
+            tracker.track(base_tracker.Log("", f"Projecting parameters: {problem_status}"))
             predictor.set_lure_system()
 
         tracker.track(

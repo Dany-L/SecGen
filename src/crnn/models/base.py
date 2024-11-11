@@ -73,7 +73,7 @@ class DynamicIdentificationModel(nn.Module, ABC):
         pass
 
     @abstractmethod
-    def initialize_parameters(self) -> None:
+    def initialize_parameters(self) -> str:
         pass
 
     def set_lure_system(self) -> LureSystemClass:
@@ -98,7 +98,7 @@ class DynamicIdentificationModel(nn.Module, ABC):
         return True
 
     @abstractmethod
-    def project_parameters(self) -> None:
+    def project_parameters(self) -> str:
         pass
 
 
@@ -125,8 +125,7 @@ class ConstrainedModule(DynamicIdentificationModel):
 
         self.sdp_opt = config.sdp_opt
 
-        self.semidefinite_constraints: List[Callable] = []
-        self.pointwise_constraints: List[Callable] = []
+        self.la = torch.nn.Parameter(torch.zeros((self.nz,)))
 
         self.A_tilde = torch.nn.Parameter(torch.zeros((self.nx, self.nx)))
         self.B = torch.nn.Parameter(
@@ -166,10 +165,10 @@ class ConstrainedModule(DynamicIdentificationModel):
         return sys
 
     def add_semidefinite_constraints(self, constraints=List[Callable]) -> None:
-        self.semidefinite_constraints.extend(constraints)
+        pass
 
     def add_pointwise_constraints(self, constraints=List[Callable]) -> None:
-        self.semidefinite_constraints.extend(constraints)
+        pass
 
     def forward(
         self, d: torch.Tensor, x0: Optional[torch.Tensor] = None
@@ -181,6 +180,19 @@ class ConstrainedModule(DynamicIdentificationModel):
         ds = d.reshape(shape=(B, N, nu, 1))
         es_hat, x = self.lure.forward(x0=x0, us=ds, return_states=True)
         return (es_hat.reshape(B, N, self.lure._ny), x.reshape(B, self.nx))
+    
+    def check_constraints(self) -> bool:
+        # check if constraints are psd
+        with torch.no_grad():
+            for lmi in self.sdp_constraints():
+                _, info = torch.linalg.cholesky_ex(lmi())
+                if info > 0:
+                    return False
+                
+            for scalar in self.pointwise_constraints():
+                if scalar() < 0:
+                    return False
+        return True
 
 
 class Linear(nn.Module):

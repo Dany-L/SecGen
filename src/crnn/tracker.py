@@ -100,13 +100,16 @@ class BaseTracker:
             print(event.log_msg)
             self.write_to_logfile(event.log_msg)
         elif isinstance(event, SaveNormalization):
-            np.savez(
-                os.path.join(self.directory, "normalization.npz"),
-                input_mean=event.input.mean,
-                input_std=event.input.std,
-                output_mean=event.output.mean,
-                output_std=event.output.std,
-            )
+            with open(
+                os.path.join(self.directory, "normalization.json"),
+                "w",
+            ) as f:
+                json.dump(dict(
+                    input_mean=float(event.input.mean),
+                    input_std=float(event.input.std),
+                    output_mean=float(event.output.mean),
+                    output_std=float(event.output.std),
+                ), f)
             self.write_to_logfile(
                 f"Save normalization mean and std to {self.directory}"
             )

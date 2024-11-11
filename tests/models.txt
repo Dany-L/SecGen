@@ -1,4 +1,0 @@
-lstm
-rnn
-tanh
-dznGen

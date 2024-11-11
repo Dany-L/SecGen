@@ -1,8 +1,10 @@
 from crnn.train import train
 from crnn.evaluate import evaluate
+from crnn.configuration import ExperimentConfig, ExperimentTemplate
 import sys
 import os
 import torch
+import json
 
 torch.set_default_dtype(torch.double)
 
@@ -12,10 +14,14 @@ result_directory = os.path.join(root_dir,'_tmp/results')
 configuration_file = os.path.join(root_dir,'config.json')
 data_directory = os.path.join(root_dir,'data')
 
-with open(os.path.join(root_dir,'models.txt')) as f:
-    model_names = [model_name.strip() for model_name in f.readlines()]
-with open(os.path.join(root_dir,'experiments.txt')) as f:
-    experiment_names = [experiment_name.strip() for experiment_name in f.readlines()]
+with open(configuration_file, mode='r') as f:
+    config_dict = json.load(f)
+
+config = ExperimentConfig.from_template(
+    ExperimentTemplate(**config_dict)
+)
+model_names = config.m_names
+experiment_names = list(config.experiments.keys())
 
 for model_name in model_names:
     for experiment_name in experiment_names:

@@ -1,12 +1,10 @@
 import argparse
 import itertools
 import json
-import os
 from dataclasses import dataclass
 from typing import Any, Dict, List, Literal, Tuple, Type
 
 import numpy as np
-import torch
 from numpy.typing import NDArray
 from pydantic import BaseModel
 
@@ -107,11 +105,14 @@ class ExperimentConfig(BaseModel):
     experiments: Dict[str, ExperimentBaseConfig]
     models: Dict[str, ModelConfiguration]
     metrics: Dict[str, BaseMetricConfig]
+    m_names: List[str]
 
     @classmethod
     def from_template(cls, template: ExperimentTemplate) -> "ExperimentConfig":
         experiments: Dict[str, ExperimentBaseConfig] = dict()
+        models: Dict[str, ModelConfiguration] = dict()
 
+        nd, ne = len(template.settings.static_parameters['input_names']), len(template.settings.static_parameters['output_names'])
         static_experiment_params = template.settings.static_parameters
 
         for combination in itertools.product(
@@ -136,22 +137,24 @@ class ExperimentConfig(BaseModel):
             )
             experiments[experiment_base_name] = experiment_config
 
-        nd, ne = len(experiment_config.input_names), len(experiment_config.output_names)
-        models: Dict[str, ModelConfiguration] = dict()
+            for model in template.models:
+                model_class = retrieve_model_class(model.m_class)
+                models[f'{experiment_base_name}-{model.m_short_name}'] = ModelConfiguration(
+                    m_class=model.m_class,
+                    parameters=model_class.CONFIG(
+                        **{
+                            **model.parameters,
+                            **static_experiment_params,
+                            **flexible_experiment_params,
+                            "nd": nd,
+                            "ne": ne,
+                        }
+                    ),
+                )
+        
+        model_names = []
         for model in template.models:
-            model_class = retrieve_model_class(model.m_class)
-            models[model.m_short_name] = ModelConfiguration(
-                m_class=model.m_class,
-                parameters=model_class.CONFIG(
-                    **{
-                        **model.parameters,
-                        **static_experiment_params,
-                        **flexible_experiment_params,
-                        "nd": nd,
-                        "ne": ne,
-                    }
-                ),
-            )
+            model_names.append(model.m_short_name)
 
         metrics = dict()
         for name, metric in template.settings.metrics.items():
@@ -161,7 +164,7 @@ class ExperimentConfig(BaseModel):
                 parameters=metric_class.CONFIG(**metric.parameters),
             )
 
-        return cls(experiments=experiments, models=models, metrics=metrics)
+        return cls(experiments=experiments, models=models, metrics=metrics, m_names=model_names)
 
 
 def load_configuration(config_file_name: str) -> ExperimentConfig:

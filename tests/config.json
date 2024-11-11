@@ -17,7 +17,6 @@
                 "learning_rate": 0.0025
             },
             "num_layer": 3,
-            "nz": 4,
             "batch_size": 4,
             "window": 10,
             "loss_function": "mse",
@@ -33,6 +32,7 @@
             ]
         },
         "flexible_parameters":{
+            "nz": [4, 6],
             "initial_hidden_state":[
                 "separate",
                 "zero",
