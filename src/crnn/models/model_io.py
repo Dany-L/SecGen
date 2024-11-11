@@ -1,7 +1,6 @@
 from typing import Optional, Tuple
 
-from ..configuration import (ModelConfiguration,
-                             retrieve_model_class)
+from ..configuration import ModelConfiguration, retrieve_model_class
 from .base import ConstrainedModule
 
 

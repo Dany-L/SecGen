@@ -112,7 +112,9 @@ class ExperimentConfig(BaseModel):
         experiments: Dict[str, ExperimentBaseConfig] = dict()
         models: Dict[str, ModelConfiguration] = dict()
 
-        nd, ne = len(template.settings.static_parameters['input_names']), len(template.settings.static_parameters['output_names'])
+        nd, ne = len(template.settings.static_parameters["input_names"]), len(
+            template.settings.static_parameters["output_names"]
+        )
         static_experiment_params = template.settings.static_parameters
 
         for combination in itertools.product(
@@ -139,19 +141,21 @@ class ExperimentConfig(BaseModel):
 
             for model in template.models:
                 model_class = retrieve_model_class(model.m_class)
-                models[f'{experiment_base_name}-{model.m_short_name}'] = ModelConfiguration(
-                    m_class=model.m_class,
-                    parameters=model_class.CONFIG(
-                        **{
-                            **model.parameters,
-                            **static_experiment_params,
-                            **flexible_experiment_params,
-                            "nd": nd,
-                            "ne": ne,
-                        }
-                    ),
+                models[f"{experiment_base_name}-{model.m_short_name}"] = (
+                    ModelConfiguration(
+                        m_class=model.m_class,
+                        parameters=model_class.CONFIG(
+                            **{
+                                **model.parameters,
+                                **static_experiment_params,
+                                **flexible_experiment_params,
+                                "nd": nd,
+                                "ne": ne,
+                            }
+                        ),
+                    )
                 )
-        
+
         model_names = []
         for model in template.models:
             model_names.append(model.m_short_name)
@@ -164,7 +168,9 @@ class ExperimentConfig(BaseModel):
                 parameters=metric_class.CONFIG(**metric.parameters),
             )
 
-        return cls(experiments=experiments, models=models, metrics=metrics, m_names=model_names)
+        return cls(
+            experiments=experiments, models=models, metrics=metrics, m_names=model_names
+        )
 
 
 def load_configuration(config_file_name: str) -> ExperimentConfig:

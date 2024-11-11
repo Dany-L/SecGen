@@ -1,5 +1,5 @@
+from typing import Callable, List
 
-from typing import Callable, List, Literal
 import cvxpy as cp
 import numpy as np
 import torch
@@ -24,9 +24,7 @@ class SectorBoundedLtiRnn(base.ConstrainedModule):
     def sdp_constraints(self) -> List[Callable]:
         def stability_lmi() -> torch.Tensor:
             L = torch.diag(self.la)
-            M11 = trans.torch_bmat(
-                [[-self.X, self.C2.T], [self.C2, -2 * L]]
-            )
+            M11 = trans.torch_bmat([[-self.X, self.C2.T], [self.C2, -2 * L]])
             M21 = trans.torch_bmat([[self.A_tilde, self.B2_tilde]])
             M22 = -self.X
             M = trans.torch_bmat([[M11, M21.T], [M21, M22]])
@@ -41,7 +39,7 @@ class SectorBoundedLtiRnn(base.ConstrainedModule):
         A_tilde = cp.Variable((self.nx, self.nx))
         B2_tilde = cp.Variable((self.nx, self.nw))
 
-        la = cp.Variable((self.nz, ))
+        la = cp.Variable((self.nz,))
         L = cp.diag(la)
         multiplier_constraints = [lam >= 0 for lam in la]
 
@@ -74,7 +72,7 @@ class SectorBoundedLtiRnn(base.ConstrainedModule):
         A_tilde = cp.Variable((self.nx, self.nx))
         B2_tilde = cp.Variable((self.nx, self.nw))
 
-        la = cp.Variable((self.nz, ))
+        la = cp.Variable((self.nz,))
         L = cp.diag(la)
         multiplier_constraints = [lam >= 0 for lam in la]
 
@@ -87,7 +85,10 @@ class SectorBoundedLtiRnn(base.ConstrainedModule):
         nM = M.shape[0]
         eps = 1e-3
         M0 = -self.sdp_constraints()[0]().detach().numpy()
-        problem = cp.Problem(cp.Minimize(cp.norm(M0 - M)), [M << -eps * np.eye(nM), *multiplier_constraints])
+        problem = cp.Problem(
+            cp.Minimize(cp.norm(M0 - M)),
+            [M << -eps * np.eye(nM), *multiplier_constraints],
+        )
         problem.solve(solver=self.sdp_opt)
         if not problem.status == "optimal":
             ValueError(f"cvxpy did not find a solution. {problem.status}")
@@ -101,7 +102,6 @@ class SectorBoundedLtiRnn(base.ConstrainedModule):
         self.X.data = torch.tensor(X.value)
 
         return problem.status
-
 
 
 class GeneralSectorBoundedLtiRnn(base.ConstrainedModule):
@@ -123,7 +123,7 @@ class GeneralSectorBoundedLtiRnn(base.ConstrainedModule):
         X = cp.Variable((self.nx, self.nx), symmetric=True)
         H = cp.Variable((self.nz, self.nx))
 
-        la = cp.Variable((self.nz, ))
+        la = cp.Variable((self.nz,))
         L = cp.diag(la)
         multiplier_constraints = [lam >= 0 for lam in la]
 
@@ -141,9 +141,10 @@ class GeneralSectorBoundedLtiRnn(base.ConstrainedModule):
         eps = 1e-3
 
         constraints = [
-            M << -eps * np.eye(nM), 
+            M << -eps * np.eye(nM),
             M_gen << -eps * np.eye(2 * self.nz),
-            *multiplier_constraints]
+            *multiplier_constraints,
+        ]
         problem = cp.Problem(cp.Minimize([None]), constraints)
         problem.solve(solver=self.sdp_opt)
         if not problem.status == "optimal":
@@ -182,7 +183,7 @@ class GeneralSectorBoundedLtiRnn(base.ConstrainedModule):
         X = cp.Variable((self.nx, self.nx), symmetric=True)
         H = cp.Variable((self.nz, self.nx))
 
-        la = cp.Variable((self.nz, ))
+        la = cp.Variable((self.nz,))
         L = cp.diag(la)
         multiplier_constraints = [lam >= 0 for lam in la]
 
@@ -202,7 +203,11 @@ class GeneralSectorBoundedLtiRnn(base.ConstrainedModule):
         eps = 1e-3
         problem = cp.Problem(
             cp.Minimize(cp.norm(M - M0) + cp.norm(M_gen - M_gen0)),
-            [M << -eps * np.eye(nM), M_gen << -eps * np.eye(2 * self.nz), *multiplier_constraints],
+            [
+                M << -eps * np.eye(nM),
+                M_gen << -eps * np.eye(2 * self.nz),
+                *multiplier_constraints,
+            ],
         )
         problem.solve(solver=self.sdp_opt)
         if not problem.status == "optimal":
@@ -217,4 +222,3 @@ class GeneralSectorBoundedLtiRnn(base.ConstrainedModule):
         self.la.data = torch.tensor(la.value)
 
         return problem.status
-

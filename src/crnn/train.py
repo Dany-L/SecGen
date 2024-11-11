@@ -32,7 +32,7 @@ def train(
 
     config = cfg.load_configuration(config_file_name)
     experiment_config = config.experiments[experiment_name]
-    model_config = config.models[f'{experiment_name}-{model_name}']
+    model_config = config.models[f"{experiment_name}-{model_name}"]
 
     train_inputs, train_outputs = load_data(
         experiment_config.input_names,
@@ -163,7 +163,9 @@ def train_joint(
 
         if not predictor.check_constraints():
             problem_status = predictor.project_parameters()
-            tracker.track(base_tracker.Log("", f"Projecting parameters: {problem_status}"))
+            tracker.track(
+                base_tracker.Log("", f"Projecting parameters: {problem_status}")
+            )
             predictor.set_lure_system()
         tracker.track(base_tracker.Log("", f"{epoch}/{epochs}\t l= {loss:.2f}"))
     tracker.track(base_tracker.Stop(""))
@@ -208,7 +210,9 @@ def train_zero(
 
         if not predictor.check_constraints():
             problem_status = predictor.project_parameters()
-            tracker.track(base_tracker.Log("", f"Projecting parameters: {problem_status}"))
+            tracker.track(
+                base_tracker.Log("", f"Projecting parameters: {problem_status}")
+            )
             predictor.set_lure_system()
         tracker.track(base_tracker.Log("", f"{epoch}/{epochs}\t l= {loss:.2f}"))
     tracker.track(base_tracker.Stop(""))
@@ -278,7 +282,9 @@ def train_separate(
 
         if not predictor.check_constraints():
             problem_status = predictor.project_parameters()
-            tracker.track(base_tracker.Log("", f"Projecting parameters: {problem_status}"))
+            tracker.track(
+                base_tracker.Log("", f"Projecting parameters: {problem_status}")
+            )
             predictor.set_lure_system()
 
         tracker.track(

@@ -32,7 +32,7 @@ def evaluate(
     tracker = base_tracker.BaseTracker(result_directory, model_name, "validation")
     config = cfg.load_configuration(config_file_name)
     experiment_config = config.experiments[experiment_name]
-    model_config = config.models[f'{experiment_name}-{model_name}']
+    model_config = config.models[f"{experiment_name}-{model_name}"]
     metrics_config = config.metrics
 
     test_inputs, test_outputs = load_data(

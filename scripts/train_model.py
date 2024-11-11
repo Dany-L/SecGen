@@ -1,8 +1,8 @@
 import argparse
+import os
 
 import numpy as np
 import torch
-import os
 from torch.utils.data import DataLoader
 
 import crnn.configuration as cfg
@@ -17,5 +17,11 @@ if __name__ == "__main__":
     result_base_directory = os.path.expanduser(os.getenv(cfg.RESULT_DIR_ENV_VAR))
     dataset_dir = os.path.expanduser(os.getenv(cfg.DATASET_DIR_ENV_VAR))
     config_file_name = os.path.expanduser(os.getenv(cfg.CONFIG_FILE_ENV_VAR))
-    
-    train(config_file_name, dataset_dir, result_base_directory, model_name, experiment_name)
+
+    train(
+        config_file_name,
+        dataset_dir,
+        result_base_directory,
+        model_name,
+        experiment_name,
+    )

@@ -104,12 +104,15 @@ class BaseTracker:
                 os.path.join(self.directory, "normalization.json"),
                 "w",
             ) as f:
-                json.dump(dict(
-                    input_mean=float(event.input.mean),
-                    input_std=float(event.input.std),
-                    output_mean=float(event.output.mean),
-                    output_std=float(event.output.std),
-                ), f)
+                json.dump(
+                    dict(
+                        input_mean=float(event.input.mean),
+                        input_std=float(event.input.std),
+                        output_mean=float(event.output.mean),
+                        output_std=float(event.output.std),
+                    ),
+                    f,
+                )
             self.write_to_logfile(
                 f"Save normalization mean and std to {self.directory}"
             )

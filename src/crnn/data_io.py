@@ -1,16 +1,16 @@
+import json
 import os
 from typing import List, Literal, Tuple, Union
 
 import numpy as np
-import json
 import pandas as pd
 import torch
 from numpy.typing import NDArray
 from scipy.io import savemat
 
-from .configuration import (DATASET_DIR_ENV_VAR,
-                            DynamicIdentificationConfig, ExperimentBaseConfig,
-                            Normalization, NormalizationParameters)
+from .configuration import (DATASET_DIR_ENV_VAR, DynamicIdentificationConfig,
+                            ExperimentBaseConfig, Normalization,
+                            NormalizationParameters)
 from .models.base import ConstrainedModule
 
 
@@ -122,9 +122,10 @@ def write_config(
 
 
 def load_normalization(directory: str) -> Normalization:
-    with open(os.path.join(directory, "normalization.json"),
-                "r",
-            ) as f:
+    with open(
+        os.path.join(directory, "normalization.json"),
+        "r",
+    ) as f:
         normalization = json.load(f)
     return Normalization(
         input=NormalizationParameters(

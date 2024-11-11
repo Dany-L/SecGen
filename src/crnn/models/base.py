@@ -180,7 +180,7 @@ class ConstrainedModule(DynamicIdentificationModel):
         ds = d.reshape(shape=(B, N, nu, 1))
         es_hat, x = self.lure.forward(x0=x0, us=ds, return_states=True)
         return (es_hat.reshape(B, N, self.lure._ny), x.reshape(B, self.nx))
-    
+
     def check_constraints(self) -> bool:
         # check if constraints are psd
         with torch.no_grad():
@@ -188,7 +188,7 @@ class ConstrainedModule(DynamicIdentificationModel):
                 _, info = torch.linalg.cholesky_ex(lmi())
                 if info > 0:
                     return False
-                
+
             for scalar in self.pointwise_constraints():
                 if scalar() < 0:
                     return False
