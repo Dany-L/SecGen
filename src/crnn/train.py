@@ -1,4 +1,4 @@
-from typing import Literal, Optional, Tuple
+from typing import Optional, Tuple
 
 import numpy as np
 import torch
@@ -9,7 +9,7 @@ from torch.utils.data import DataLoader
 from . import configuration as cfg
 from . import tracker as base_tracker
 from .data_io import get_result_directory_name, load_data
-from .datasets import RecurrentWindowHorizonDataset, get_datasets, get_loaders
+from .datasets import get_datasets, get_loaders
 from .loss import get_loss_function
 from .models import base
 from .models.model_io import get_model_from_config

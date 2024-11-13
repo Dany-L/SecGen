@@ -7,6 +7,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 from pydantic import BaseModel
+from numpy.typing import NDArray
 
 from ..utils import transformation as trans
 
@@ -105,6 +106,7 @@ class DynamicIdentificationModel(nn.Module, ABC):
 class ConstrainedModuleConfig(DynamicIdentificationConfig):
     sdp_opt: str = cp.MOSEK
     nonlinearity: Literal["tanh", "relu", "deadzone", "sat"] = "tanh"
+    multiplier: Literal['none', 'diag', 'zf'] = 'none'
 
 
 class ConstrainedModule(DynamicIdentificationModel):
@@ -125,7 +127,13 @@ class ConstrainedModule(DynamicIdentificationModel):
 
         self.sdp_opt = config.sdp_opt
 
-        self.la = torch.nn.Parameter(torch.zeros((self.nz,)))
+        self.multiplier = config.multiplier
+        if self.multiplier == 'none':
+            self.L = torch.eye(self.nz)
+        elif config.multiplier == 'diag':
+            self.L = torch.nn.Parameter(torch.ones((self.nz,)))
+        else:
+            raise NotImplementedError(f"Unsupported multiplier: {config.multiplier}")
 
         self.A_tilde = torch.nn.Parameter(torch.zeros((self.nx, self.nx)))
         self.B = torch.nn.Parameter(
@@ -143,7 +151,7 @@ class ConstrainedModule(DynamicIdentificationModel):
             torch.normal(0, 1 / self.ne, size=(self.ne, self.nw))
         )
 
-        self.C2 = torch.nn.Parameter(torch.zeros((self.nz, self.nx)))
+        self.C2_tilde = torch.nn.Parameter(torch.zeros((self.nz, self.nx)))
         self.D21 = torch.nn.Parameter(
             torch.normal(0, 1 / self.nz, size=(self.nz, self.nd))
         )
@@ -151,13 +159,46 @@ class ConstrainedModule(DynamicIdentificationModel):
 
         self.X = torch.nn.Parameter(torch.zeros((self.nx, self.nx)))
 
+    def get_optimization_multiplier_and_constraints(self) -> Tuple[Union[NDArray[np.float64],cp.Variable], List[cp.Constraint]]:
+        if self.multiplier == 'none':
+            L = np.eye(self.nz)
+            multiplier_constraints = []
+        elif self.multiplier == 'diag':
+            la = cp.Variable((self.nz,))
+            L = cp.diag(la)
+            multiplier_constraints = [lam >= 0 for lam in la]
+        else:
+            raise NotImplementedError(f"Unsupported multiplier: {self.multiplier}")
+        return (L, multiplier_constraints)
+    
+
+    def get_L(self) -> torch.Tensor:
+        if self.multiplier == 'none':
+            return self.L
+        elif self.multiplier == 'diag':
+            return torch.diag(self.L)
+        else:
+            raise NotImplementedError(f"Unsupported multiplier: {self.multiplier}")
+        
+    def set_L(self, L: torch.Tensor) -> None:
+        if self.multiplier == 'none':
+            self.L = L
+        elif self.multiplier == 'diag':
+            self.L.value = torch.diag(L)
+        else:
+            raise NotImplementedError(f"Unsupported multiplier: {self.multiplier}")
+        
+        
+
     def set_lure_system(self) -> LureSystemClass:
         X_inv = torch.linalg.inv(self.X)
         A = X_inv @ self.A_tilde
         B2 = X_inv @ self.B2_tilde
 
+        C2 = torch.linalg.inv(self.get_L()) @ self.C2_tilde
+
         theta = trans.torch_bmat(
-            [[A, self.B, B2], [self.C, self.D, self.D12], [self.C2, self.D21, self.D22]]
+            [[A, self.B, B2], [self.C, self.D, self.D12], [C2, self.D21, self.D22]]
         )
         sys = get_lure_matrices(theta, self.nx, self.nd, self.ne, self.nl)
         self.lure = LureSystem(sys)

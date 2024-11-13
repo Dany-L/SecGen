@@ -9,14 +9,13 @@
             }
         },
         "static_parameters":{
-            "epochs": 5,
+            "epochs": 2,
             "eps": 1e-3,
             "dt": 0.01,
             "optimizer": {
                 "name": "adam",
                 "learning_rate": 0.0025
             },
-            "num_layer": 3,
             "batch_size": 4,
             "window": 10,
             "loss_function": "mse",
@@ -62,7 +61,16 @@
             "m_short_name" : "tanh",
             "m_class": "crnn.models.sector_bounded.SectorBoundedLtiRnn",
             "parameters": {
-                "nonlinearity": "tanh"
+                "nonlinearity": "tanh",
+                "multiplier": "none"
+            }
+        },
+        {
+            "m_short_name" : "sat",
+            "m_class": "crnn.models.sector_bounded.SectorBoundedLtiRnn",
+            "parameters": {
+                "nonlinearity": "sat",
+                "multiplier": "diag"
             }
         },
         {

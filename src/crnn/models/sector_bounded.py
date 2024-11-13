@@ -6,6 +6,7 @@ import torch
 
 from ..utils import transformation as trans
 from . import base
+from ..utils import base as utils
 
 
 class SectorBoundedLtiRnn(base.ConstrainedModule):
@@ -13,18 +14,18 @@ class SectorBoundedLtiRnn(base.ConstrainedModule):
 
     def __init__(self, config: base.ConstrainedModuleConfig) -> None:
         super().__init__(config)
-        # self.tracker = tracker
 
     def pointwise_constraints(self) -> List[Callable]:
         constraint_fcn: List[Callable] = []
+        la = torch.diag(self.get_L())
         for n_k in range(self.nz):
-            constraint_fcn.append(lambda: self.la[n_k])
+            constraint_fcn.append(lambda: la[n_k])
         return constraint_fcn
 
     def sdp_constraints(self) -> List[Callable]:
         def stability_lmi() -> torch.Tensor:
-            L = torch.diag(self.la)
-            M11 = trans.torch_bmat([[-self.X, self.C2.T], [self.C2, -2 * L]])
+            L = self.get_L()
+            M11 = trans.torch_bmat([[-self.X, self.C2_tilde.T], [self.C2_tilde, -2 * L]])
             M21 = trans.torch_bmat([[self.A_tilde, self.B2_tilde]])
             M22 = -self.X
             M = trans.torch_bmat([[M11, M21.T], [M21, M22]])
@@ -39,13 +40,11 @@ class SectorBoundedLtiRnn(base.ConstrainedModule):
         A_tilde = cp.Variable((self.nx, self.nx))
         B2_tilde = cp.Variable((self.nx, self.nw))
 
-        la = cp.Variable((self.nz,))
-        L = cp.diag(la)
-        multiplier_constraints = [lam >= 0 for lam in la]
+        L, multiplier_constraints = self.get_optimization_multiplier_and_constraints()
 
-        C2 = cp.Variable((self.nz, self.nx))
+        C2_tilde = cp.Variable((self.nz, self.nx))
 
-        M11 = cp.bmat([[-X, C2.T], [C2, -2 * L]])
+        M11 = cp.bmat([[-X, C2_tilde.T], [C2_tilde, -2 * L]])
         M21 = cp.bmat([[A_tilde, B2_tilde]])
         M22 = -X
         M = cp.bmat([[M11, M21.T], [M21, M22]])
@@ -57,12 +56,12 @@ class SectorBoundedLtiRnn(base.ConstrainedModule):
         if not problem.status == "optimal":
             ValueError(f"cvxpy did not find a solution. {problem.status}")
 
-        self.A_tilde.data = torch.tensor(A_tilde.value)
-        self.B2_tilde.data = torch.tensor(B2_tilde.value)
+        self.A_tilde.data = torch.tensor(utils.get_opt_values(A_tilde))
+        self.B2_tilde.data = torch.tensor(utils.get_opt_values(B2_tilde))
 
-        self.C2.data = torch.tensor(C2.value)
-        self.X.data = torch.tensor(X.value)
-        self.la.data = torch.tensor(la.value)
+        self.C2_tilde.data = torch.tensor(utils.get_opt_values(C2_tilde))
+        self.X.data = torch.tensor(utils.get_opt_values(X))
+        self.set_L(torch.tensor(utils.get_opt_values(L)))
 
         return problem.status
 
@@ -72,13 +71,11 @@ class SectorBoundedLtiRnn(base.ConstrainedModule):
         A_tilde = cp.Variable((self.nx, self.nx))
         B2_tilde = cp.Variable((self.nx, self.nw))
 
-        la = cp.Variable((self.nz,))
-        L = cp.diag(la)
-        multiplier_constraints = [lam >= 0 for lam in la]
+        L, multiplier_constraints = self.get_optimization_multiplier_and_constraints()
+        
+        C2_tilde = cp.Variable((self.nz, self.nx))
 
-        C2 = cp.Variable((self.nz, self.nx))
-
-        M11 = cp.bmat([[-X, C2.T], [C2, -2 * L]])
+        M11 = cp.bmat([[-X, C2_tilde.T], [C2_tilde, -2 * L]])
         M21 = cp.bmat([[A_tilde, B2_tilde]])
         M22 = -X
         M = cp.bmat([[M11, M21.T], [M21, M22]])
@@ -93,13 +90,13 @@ class SectorBoundedLtiRnn(base.ConstrainedModule):
         if not problem.status == "optimal":
             ValueError(f"cvxpy did not find a solution. {problem.status}")
 
-        self.A_tilde.data = torch.tensor(A_tilde.value)
-        self.B2_tilde.data = torch.tensor(B2_tilde.value)
+        self.A_tilde.data = torch.tensor(utils.get_opt_values(A_tilde))
+        self.B2_tilde.data = torch.tensor(utils.get_opt_values(B2_tilde)) 
 
-        self.la.data = torch.tensor(la.value)
+        self.set_L(torch.tensor(utils.get_opt_values(L)))
 
-        self.C2.data = torch.tensor(C2.value)
-        self.X.data = torch.tensor(X.value)
+        self.C2_tilde.data = torch.tensor(utils.get_opt_values(C2_tilde))
+        self.X.data = torch.tensor(utils.get_opt_values(X))
 
         return problem.status
 
@@ -114,8 +111,9 @@ class GeneralSectorBoundedLtiRnn(base.ConstrainedModule):
 
     def pointwise_constraints(self) -> List[Callable]:
         constraint_fcn: List[Callable] = []
+        la = torch.diag(self.get_L())
         for n_k in range(self.nz):
-            constraint_fcn.append(lambda: self.la[n_k])
+            constraint_fcn.append(lambda: la[n_k])
         return constraint_fcn
 
     def initialize_parameters(self) -> str:
@@ -123,16 +121,14 @@ class GeneralSectorBoundedLtiRnn(base.ConstrainedModule):
         X = cp.Variable((self.nx, self.nx), symmetric=True)
         H = cp.Variable((self.nz, self.nx))
 
-        la = cp.Variable((self.nz,))
-        L = cp.diag(la)
-        multiplier_constraints = [lam >= 0 for lam in la]
+        L, multiplier_constraints = self.get_optimization_multiplier_and_constraints()
 
         A_tilde = cp.Variable((self.nx, self.nx))
         B2_tilde = cp.Variable((self.nx, self.nw))
 
-        C2 = cp.Variable((self.nz, self.nx))
+        C2_tilde = cp.Variable((self.nz, self.nx))
 
-        M11 = cp.bmat([[-X, (C2 - H).T], [C2 - H, -2 * L]])
+        M11 = cp.bmat([[-X, (C2_tilde - H).T], [C2_tilde - H, -2 * L]])
         M21 = cp.bmat([[A_tilde, B2_tilde]])
         M22 = -X
         M = cp.bmat([[M11, M21.T], [M21, M22]])
@@ -153,7 +149,9 @@ class GeneralSectorBoundedLtiRnn(base.ConstrainedModule):
         self.A_tilde.data = torch.tensor(A_tilde.value)
         self.B2_tilde.data = torch.tensor(B2_tilde.value)
 
-        self.C2.data = torch.tensor(C2.value)
+        self.set_L(torch.tensor(utils.get_opt_values(L)))
+
+        self.C2_tilde.data = torch.tensor(C2_tilde.value)
         self.X.data = torch.tensor(X.value)
         self.H.data = torch.tensor(H.value)
 
@@ -163,8 +161,8 @@ class GeneralSectorBoundedLtiRnn(base.ConstrainedModule):
         def stability_lmi() -> torch.Tensor:
             M11 = trans.torch_bmat(
                 [
-                    [-self.X, (self.C2 - self.H).T],
-                    [self.C2 - self.H, -2 * torch.eye(self.nz)],
+                    [-self.X, (self.C2_tilde - self.H).T],
+                    [self.C2_tilde - self.H, -2 * torch.eye(self.nz)],
                 ]
             )
             M21 = trans.torch_bmat([[self.A_tilde, self.B2_tilde]])
@@ -183,16 +181,14 @@ class GeneralSectorBoundedLtiRnn(base.ConstrainedModule):
         X = cp.Variable((self.nx, self.nx), symmetric=True)
         H = cp.Variable((self.nz, self.nx))
 
-        la = cp.Variable((self.nz,))
-        L = cp.diag(la)
-        multiplier_constraints = [lam >= 0 for lam in la]
+        L, multiplier_constraints = self.get_optimization_multiplier_and_constraints()
 
         A_tilde = cp.Variable((self.nx, self.nx))
         B2_tilde = cp.Variable((self.nx, self.nw))
 
-        C2 = cp.Variable((self.nz, self.nx))
+        C2_tilde = cp.Variable((self.nz, self.nx))
 
-        M11 = cp.bmat([[-X, (C2 - H).T], [C2 - H, -2 * L]])
+        M11 = cp.bmat([[-X, (C2_tilde - H).T], [C2_tilde - H, -2 * L]])
         M21 = cp.bmat([[A_tilde, B2_tilde]])
         M22 = -X
         M = cp.bmat([[M11, M21.T], [M21, M22]])
@@ -216,9 +212,9 @@ class GeneralSectorBoundedLtiRnn(base.ConstrainedModule):
         self.A_tilde.data = torch.tensor(A_tilde.value)
         self.B2_tilde.data = torch.tensor(B2_tilde.value)
 
-        self.C2.data = torch.tensor(C2.value)
+        self.C2_tilde.data = torch.tensor(C2_tilde.value)
         self.X.data = torch.tensor(X.value)
         self.H.data = torch.tensor(H.value)
-        self.la.data = torch.tensor(la.value)
+        self.set_L(torch.tensor(utils.get_opt_values(L)))
 
         return problem.status

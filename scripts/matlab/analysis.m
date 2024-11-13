@@ -1,10 +1,10 @@
 clear all, close all,
 %%
-experiment_name = 'P-4-separate';
-result_directory = '~/actuated_pendulum/2024_11_11-results/';
+experiment_name = 'P-4-joint';
+result_directory = '~/actuated_pendulum/results_local/';
 
-model_names = {'tanh','dzn','sat','dznGen'};
-% model_names = {'tanh'};
+% model_names = {'tanh','dzn','dznGen'};
+model_names = {'tanh'};
 results = cell(length(model_names));
 for model_idx =1:length(model_names)
     model_name = model_names{model_idx};
@@ -13,6 +13,7 @@ for model_idx =1:length(model_names)
     result_folder_name = sprintf('%s-%s', experiment_name, model_name);
     parameter_file_name = sprintf('model_params-%s.mat', model_name);
     test_file_name = '/Users/jack/actuated_pendulum/data/nonlinear-initial_state-0_M-500_T-10/processed/test/0198_simulation_T_10.csv';
+%     test_file_name = '/Users/jack/actuated_pendulum/data/ood-initial_state_0-s_4_M-100_T-10/processed/test/0058_simulation_T_10.csv';
     experiment_config_file_name = sprintf('config-experiment-%s.json', model_name);
     model_config_file_name = sprintf('config-model-%s.json', model_name);
     model_cfg = jsondecode(fileread(fullfile(result_directory,result_folder_name,model_config_file_name)));
@@ -41,7 +42,18 @@ for model_idx =1:length(model_names)
 
     %% load controller parameters
     nx = size(A_tilde,1); nw = size(B2_tilde,1); nz = nw;
-    M11_orig = [-X, C2';C2, -2*eye(nz) ];
+    fprintf('Multiplier type: %s\n', model_cfg.multiplier)
+    switch model_cfg.multiplier
+        case 'none'
+            L = eye(nw);
+        case 'diag'
+            L = diag(L);
+    end
+    
+    P_r = [-eye(nw) b*eye(nw); eye(nw) -a*eye(nw)];
+    P = P_r' * [zeros(nw,nw), L'; L, zeros(nw,nw)] * P_r;
+
+    M11_orig = [-X, C2_tilde';C2_tilde, -2*L ];
     M21_orig = [A_tilde, B2_tilde];
     M_orig = [M11_orig, M21_orig';M21_orig, -X];
     fprintf('max real eig M_orig: %f\n',max(real(eig(M_orig))))
@@ -50,27 +62,18 @@ for model_idx =1:length(model_names)
     A = X_inv * A_tilde;
     B2 = X_inv * B2_tilde;
 
-    %% analyze stability
-%     L1 = [eye(nx), zeros(nx,nw);
-%         A, B2];
+    C2 = L^(-1) * C2_tilde;
 
-    P_r = [-eye(nw) b*eye(nw); eye(nw) -a*eye(nw)];
-    L = diag(la); % can be replaced by diag multiplier
-    P = P_r' * [zeros(nw,nw), L'; L, zeros(nw,nw)] * P_r;
-
+    %% analyze l2 stability
     L1 = [eye(nx),zeros(nx,nd), zeros(nx,nw);
         A, B, B2];
     L2 = [zeros(nd, nx), eye(ne), zeros(nd, nw);
         C, D, D12];
 
     if b_gen
-%         L3 = [zeros(nw,nx), eye(nw);
-%             C2-H, zeros(nz,nw)];
         L3 = [zeros(nw,nx), zeros(nw,nd), eye(nw);
             C2-H, D21, zeros(nz,nw)];
     else
-%         L3 = [zeros(nw,nx), eye(nw);
-%             C2, zeros(nz,nw)];
         L3 = [zeros(nw,nx),zeros(nw,nd) eye(nw);
             C2, D21, zeros(nz,nw)];
     end
@@ -78,15 +81,15 @@ for model_idx =1:length(model_names)
     M = @(ga) L1' * [-X, zeros(nx,nx);zeros(nx,nx), X] * L1 + ...
         L2' * [-ga^2*eye(nd), zeros(nd,ne); zeros(ne,nd), eye(ne)] * L2 + ...
         L3' * P * L3;
-    ga = 0:10:1000; 
-    max_real_eig = zeros(length(ga), 1);
-    for idx = 1:length(ga)
-        max_real_eig(idx,1) = max(real(eig(M(ga(idx)))));
+
+    gas = logspace(0,6,100);
+    max_real_eig = zeros(length(gas), 1);
+    for idx = 1:length(gas)
+        max_real_eig(idx,1) = max(real(eig(M(gas(idx)))));
     end
     fprintf('max real eig M: %f\n',min(max_real_eig))
 
-%     figure()
-%     semilogx(ga, max_real_eig), grid on
+    figure(), semilogx(gas, max_real_eig), grid on
     
     if b_gen
         fprintf('max real eig (H^T H - X): %f\n',max(real(eig(H'*H-X))))

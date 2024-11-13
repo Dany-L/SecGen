@@ -89,7 +89,6 @@ class ExperimentBaseConfig(BaseModel):
     epochs: int
     eps: float
     optimizer: OptimizerConfig
-    num_layer: int
     dt: float
     nz: int
     batch_size: int
