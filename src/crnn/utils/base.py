@@ -1,8 +1,8 @@
 from typing import List, Tuple, Union
 
+import cvxpy as cp
 import numpy as np
 from numpy.typing import NDArray
-import cvxpy as cp
 
 
 def get_duration_str(start_time: float, end_time: float) -> str:
@@ -39,7 +39,10 @@ def get_model_file_name(name: str, model_name: str) -> str:
 def get_config_file_name(name: str, model_name: str) -> str:
     return f"config-{name}-{model_name}.json"
 
-def get_opt_values(opt_vars: Union[NDArray[np.float64], cp.Expression]) -> NDArray[np.float64]:
+
+def get_opt_values(
+    opt_vars: Union[NDArray[np.float64], cp.Expression]
+) -> NDArray[np.float64]:
     if isinstance(opt_vars, cp.Expression):
         return opt_vars.value
     return opt_vars

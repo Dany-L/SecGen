@@ -1,10 +1,9 @@
 import argparse
 import os
 
-import numpy as np
 import torch
 
-from crnn import configuration as cfg
+from crnn.configuration import base as cfg
 from crnn.evaluate import evaluate
 
 torch.set_default_dtype(torch.double)

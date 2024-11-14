@@ -1,11 +1,9 @@
 import argparse
 import os
 
-import numpy as np
 import torch
-from torch.utils.data import DataLoader
 
-import crnn.configuration as cfg
+import crnn.configuration.base as cfg
 from crnn.train import train
 
 torch.set_default_dtype(torch.double)

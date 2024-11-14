@@ -1,17 +1,15 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Callable, List, Literal, Optional, Tuple, Union
+from typing import Callable, List, Literal, Optional, Tuple, Type, Union
 
 import cvxpy as cp
 import numpy as np
 import torch
 import torch.nn as nn
-from pydantic import BaseModel
 from numpy.typing import NDArray
+from pydantic import BaseModel
 
 from ..utils import transformation as trans
-
-# from .. import tracker as base_tracker
 
 
 @dataclass
@@ -91,8 +89,15 @@ class DynamicIdentificationModel(nn.Module, ABC):
 
     @abstractmethod
     def forward(
-        self, d: torch.Tensor, x0: Optional[torch.Tensor] = None
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        self,
+        d: torch.Tensor,
+        x0: Optional[
+            Union[Tuple[torch.Tensor, torch.Tensor], Tuple[torch.Tensor, torch.Tensor]]
+        ] = None,
+    ) -> Tuple[
+        torch.Tensor,
+        Union[Tuple[torch.Tensor, torch.Tensor], Tuple[torch.Tensor, torch.Tensor]],
+    ]:
         pass
 
     def check_constraints(self) -> bool:
@@ -106,7 +111,7 @@ class DynamicIdentificationModel(nn.Module, ABC):
 class ConstrainedModuleConfig(DynamicIdentificationConfig):
     sdp_opt: str = cp.MOSEK
     nonlinearity: Literal["tanh", "relu", "deadzone", "sat"] = "tanh"
-    multiplier: Literal['none', 'diag', 'zf'] = 'none'
+    multiplier: Literal["none", "diag", "zf"] = "none"
 
 
 class ConstrainedModule(DynamicIdentificationModel):
@@ -128,9 +133,9 @@ class ConstrainedModule(DynamicIdentificationModel):
         self.sdp_opt = config.sdp_opt
 
         self.multiplier = config.multiplier
-        if self.multiplier == 'none':
+        if self.multiplier == "none":
             self.L = torch.eye(self.nz)
-        elif config.multiplier == 'diag':
+        elif config.multiplier == "diag":
             self.L = torch.nn.Parameter(torch.ones((self.nz,)))
         else:
             raise NotImplementedError(f"Unsupported multiplier: {config.multiplier}")
@@ -159,36 +164,35 @@ class ConstrainedModule(DynamicIdentificationModel):
 
         self.X = torch.nn.Parameter(torch.zeros((self.nx, self.nx)))
 
-    def get_optimization_multiplier_and_constraints(self) -> Tuple[Union[NDArray[np.float64],cp.Variable], List[cp.Constraint]]:
-        if self.multiplier == 'none':
+    def get_optimization_multiplier_and_constraints(
+        self,
+    ) -> Tuple[Union[NDArray[np.float64], cp.Variable], List[cp.Constraint]]:
+        if self.multiplier == "none":
             L = np.eye(self.nz)
             multiplier_constraints = []
-        elif self.multiplier == 'diag':
+        elif self.multiplier == "diag":
             la = cp.Variable((self.nz,))
             L = cp.diag(la)
             multiplier_constraints = [lam >= 0 for lam in la]
         else:
             raise NotImplementedError(f"Unsupported multiplier: {self.multiplier}")
         return (L, multiplier_constraints)
-    
 
     def get_L(self) -> torch.Tensor:
-        if self.multiplier == 'none':
+        if self.multiplier == "none":
             return self.L
-        elif self.multiplier == 'diag':
+        elif self.multiplier == "diag":
             return torch.diag(self.L)
         else:
             raise NotImplementedError(f"Unsupported multiplier: {self.multiplier}")
-        
+
     def set_L(self, L: torch.Tensor) -> None:
-        if self.multiplier == 'none':
+        if self.multiplier == "none":
             self.L = L
-        elif self.multiplier == 'diag':
+        elif self.multiplier == "diag":
             self.L.value = torch.diag(L)
         else:
             raise NotImplementedError(f"Unsupported multiplier: {self.multiplier}")
-        
-        
 
     def set_lure_system(self) -> LureSystemClass:
         X_inv = torch.linalg.inv(self.X)
@@ -212,15 +216,27 @@ class ConstrainedModule(DynamicIdentificationModel):
         pass
 
     def forward(
-        self, d: torch.Tensor, x0: Optional[torch.Tensor] = None
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        self,
+        d: torch.Tensor,
+        x0: Optional[
+            Union[Tuple[torch.Tensor, torch.Tensor], Tuple[torch.Tensor]]
+        ] = None,
+    ) -> Tuple[
+        torch.Tensor,
+        Union[Tuple[torch.Tensor, torch.Tensor], Tuple[torch.Tensor]],
+    ]:
         B, N, nu = d.shape  # number of batches, length of sequence, input size
         assert self.lure._nu == nu
         if x0 is None:
             x0 = torch.zeros(size=(B, self.nx))
+        else:
+            x0 = x0[0]
         ds = d.reshape(shape=(B, N, nu, 1))
         es_hat, x = self.lure.forward(x0=x0, us=ds, return_states=True)
-        return (es_hat.reshape(B, N, self.lure._ny), x.reshape(B, self.nx))
+        return (
+            es_hat.reshape(B, N, self.lure._ny),
+            (x.reshape(B, self.nx),),
+        )
 
     def check_constraints(self) -> bool:
         # check if constraints are psd
@@ -317,3 +333,19 @@ def load_model(model: ConstrainedModule, model_file_name: str) -> ConstrainedMod
     model.load_state_dict(torch.load(model_file_name))
     model.set_lure_system()
     return model
+
+
+def retrieve_model_class(model_class_string: str) -> Type[DynamicIdentificationModel]:
+    # https://stackoverflow.com/a/452981
+    parts = model_class_string.split(".")
+    module_string = ".".join(parts[:-1])
+    module = __import__(module_string)
+
+    cls = getattr(module, parts[1])
+    if len(parts) > 2:
+        for component in parts[2:]:
+            cls = getattr(cls, component)
+
+    if not issubclass(cls, DynamicIdentificationModel):
+        raise ValueError(f"{cls} is not a subclass of DynamicIdentificationModel")
+    return cls  # type: ignore

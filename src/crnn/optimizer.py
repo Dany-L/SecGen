@@ -3,11 +3,11 @@ from typing import Iterable, Optional, Tuple
 import torch
 import torch.optim as opt
 
-from .configuration import ExperimentBaseConfig
+from .configuration.experiment import BaseExperimentConfig
 
 
 def get_optimizer(
-    config: ExperimentBaseConfig, params: Tuple[Iterable[torch.Tensor]]
+    config: BaseExperimentConfig, params: Tuple[Iterable[torch.Tensor]]
 ) -> Tuple[Optional[opt.Optimizer]]:
     optimizers: Optional[Tuple[opt.Optimizer]] = None
     opt_config = config.optimizer

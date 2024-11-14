@@ -6,14 +6,16 @@ from torch import nn
 from torch.optim import Optimizer
 from torch.utils.data import DataLoader
 
-from . import configuration as cfg
-from . import tracker as base_tracker
+from .configuration.experiment import load_configuration
 from .data_io import get_result_directory_name, load_data
 from .datasets import get_datasets, get_loaders
 from .loss import get_loss_function
 from .models import base
 from .models.model_io import get_model_from_config
 from .optimizer import get_optimizer
+from .tracker import events as ev
+from .tracker.base import AggregatedTracker
+from .tracker.io import IoTracker
 from .utils import base as utils
 from .utils import plot
 
@@ -28,9 +30,9 @@ def train(
     result_directory = get_result_directory_name(
         result_base_directory, model_name, experiment_name
     )
-    tracker = base_tracker.BaseTracker(result_directory, model_name)
+    tracker = AggregatedTracker([IoTracker(result_directory, model_name, "validation")])
 
-    config = cfg.load_configuration(config_file_name)
+    config = load_configuration(config_file_name)
     experiment_config = config.experiments[experiment_name]
     model_config = config.models[f"{experiment_name}-{model_name}"]
 
@@ -45,10 +47,10 @@ def train(
     n_train_inputs = utils.normalize(train_inputs, input_mean, input_std)
     n_train_outputs = utils.normalize(train_outputs, output_mean, output_std)
     tracker.track(
-        base_tracker.SaveNormalization(
+        ev.SaveNormalization(
             "",
-            input=base_tracker.NormalizationParameters(input_mean, input_std),
-            output=base_tracker.NormalizationParameters(output_mean, output_std),
+            input=ev.NormalizationParameters(input_mean, input_std),
+            output=ev.NormalizationParameters(output_mean, output_std),
         )
     )
     assert (
@@ -108,12 +110,12 @@ def train(
         raise ValueError(
             f"Unknown initial_hidden_state: {experiment_config.initial_hidden_state}"
         )
-    tracker.track(base_tracker.SaveModel("", predictor, "predictor"))
+    tracker.track(ev.SaveModel("", predictor, "predictor"))
     if initializer is not None:
-        tracker.track(base_tracker.SaveModel("", initializer, "initializer"))
-    tracker.track(base_tracker.SaveModelParameter("", predictor))
-    tracker.track(base_tracker.SaveConfig("", "experiment", experiment_config))
-    tracker.track(base_tracker.SaveConfig("", "model", model_config.parameters))
+        tracker.track(ev.SaveModel("", initializer, "initializer"))
+    tracker.track(ev.SaveModelParameter("", predictor))
+    tracker.track(ev.SaveConfig("", "experiment", experiment_config))
+    tracker.track(ev.SaveConfig("", "model", model_config.parameters))
 
 
 def train_joint(
@@ -122,7 +124,7 @@ def train_joint(
     epochs: int,
     optimizers: Tuple[Optimizer],
     loss_function: nn.Module,
-    tracker: base_tracker.BaseTracker = base_tracker.BaseTracker(),
+    tracker: AggregatedTracker = AggregatedTracker(),
 ) -> Tuple[Optional[base.ConstrainedModule]]:
     _, train_loader = loaders
     initializer, predictor = models
@@ -130,10 +132,10 @@ def train_joint(
     initializer.initialize_parameters()
     initializer.set_lure_system()
     problem_status = predictor.initialize_parameters()
-    tracker.track(base_tracker.Log("", f"Initialize parameters: {problem_status}"))
+    tracker.track(ev.Log("", f"Initialize parameters: {problem_status}"))
     predictor.set_lure_system()
     predictor.train()
-    tracker.track(base_tracker.Start(""))
+    tracker.track(ev.Start(""))
 
     for epoch in range(epochs):
         loss = 0
@@ -159,16 +161,14 @@ def train_joint(
                 title="normalized output",
                 legend=[r"$\hat e$", r"$e$"],
             )
-            tracker.track(base_tracker.SaveFig("", fig, f"e_{epoch}"))
+            tracker.track(ev.SaveFig("", fig, f"e_{epoch}"))
 
         if not predictor.check_constraints():
             problem_status = predictor.project_parameters()
-            tracker.track(
-                base_tracker.Log("", f"Projecting parameters: {problem_status}")
-            )
+            tracker.track(ev.Log("", f"Projecting parameters: {problem_status}"))
             predictor.set_lure_system()
-        tracker.track(base_tracker.Log("", f"{epoch}/{epochs}\t l= {loss:.2f}"))
-    tracker.track(base_tracker.Stop(""))
+        tracker.track(ev.Log("", f"{epoch}/{epochs}\t l= {loss:.2f}"))
+    tracker.track(ev.Stop(""))
 
     return (initializer, predictor)
 
@@ -179,7 +179,7 @@ def train_zero(
     epochs: int,
     optimizers: Tuple[Optimizer],
     loss_function: nn.Module,
-    tracker: base_tracker.BaseTracker = base_tracker.BaseTracker(),
+    tracker: AggregatedTracker = AggregatedTracker(),
 ) -> Tuple[Optional[base.ConstrainedModule]]:
     _, train_loader = loaders
     _, predictor = models
@@ -187,7 +187,7 @@ def train_zero(
     predictor.initialize_parameters()
     predictor.set_lure_system()
     predictor.train()
-    tracker.track(base_tracker.Start(""))
+    tracker.track(ev.Start(""))
 
     for epoch in range(epochs):
         loss = 0
@@ -206,16 +206,14 @@ def train_zero(
                 title="normalized output",
                 legend=[r"$\hat e$", r"$e$"],
             )
-            tracker.track(base_tracker.SaveFig("", fig, f"e_{epoch}"))
+            tracker.track(ev.SaveFig("", fig, f"e_{epoch}"))
 
         if not predictor.check_constraints():
             problem_status = predictor.project_parameters()
-            tracker.track(
-                base_tracker.Log("", f"Projecting parameters: {problem_status}")
-            )
+            tracker.track(ev.Log("", f"Projecting parameters: {problem_status}"))
             predictor.set_lure_system()
-        tracker.track(base_tracker.Log("", f"{epoch}/{epochs}\t l= {loss:.2f}"))
-    tracker.track(base_tracker.Stop(""))
+        tracker.track(ev.Log("", f"{epoch}/{epochs}\t l= {loss:.2f}"))
+    tracker.track(ev.Stop(""))
 
     return (None, predictor)
 
@@ -226,7 +224,7 @@ def train_separate(
     epochs: int,
     optimizers: Tuple[Optimizer],
     loss_function: nn.Module,
-    tracker: base_tracker.BaseTracker = base_tracker.BaseTracker(),
+    tracker: AggregatedTracker = AggregatedTracker(),
 ) -> Tuple[Optional[base.ConstrainedModule]]:
     init_loader, pred_loader = loaders
     initializer, predictor = models
@@ -235,10 +233,10 @@ def train_separate(
     initializer.set_lure_system()
     initializer.train()
     problem_status = predictor.initialize_parameters()
-    tracker.track(base_tracker.Log("", f"Initialize parameters: {problem_status}"))
+    tracker.track(ev.Log("", f"Initialize parameters: {problem_status}"))
     predictor.set_lure_system()
     predictor.train()
-    tracker.track(base_tracker.Start(""))
+    tracker.track(ev.Start(""))
 
     # initializer
     for epoch in range(epochs):
@@ -252,9 +250,7 @@ def train_separate(
             initializer.set_lure_system()
             loss += batch_loss.item()
 
-        tracker.track(
-            base_tracker.Log("", f"{epoch}/{epochs} (initializer)\t l= {loss:.2f}")
-        )
+        tracker.track(ev.Log("", f"{epoch}/{epochs} (initializer)\t l= {loss:.2f}"))
 
     # predictor
     for epoch in range(epochs):
@@ -278,18 +274,14 @@ def train_separate(
                 title="normalized output",
                 legend=[r"$\hat e$", r"$e$"],
             )
-            tracker.track(base_tracker.SaveFig("", fig, f"e_{epoch}"))
+            tracker.track(ev.SaveFig("", fig, f"e_{epoch}"))
 
         if not predictor.check_constraints():
             problem_status = predictor.project_parameters()
-            tracker.track(
-                base_tracker.Log("", f"Projecting parameters: {problem_status}")
-            )
+            tracker.track(ev.Log("", f"Projecting parameters: {problem_status}"))
             predictor.set_lure_system()
 
-        tracker.track(
-            base_tracker.Log("", f"{epoch}/{epochs} (predictor)\t l= {loss:.2f}")
-        )
-    tracker.track(base_tracker.Stop(""))
+        tracker.track(ev.Log("", f"{epoch}/{epochs} (predictor)\t l= {loss:.2f}"))
+    tracker.track(ev.Stop(""))
 
     return (initializer, predictor)

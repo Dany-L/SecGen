@@ -8,6 +8,16 @@
                 }
             }
         },
+        "additional_tests":{
+            "stability_evaluation":{
+                "test_class": "crnn.additional_tests.StabilityOfInitialState",
+                "parameters":{
+                    "epochs": 2,
+                    "horizon": 10,
+                    "sampling_type": "random"
+                }
+            }
+        },  
         "static_parameters":{
             "epochs": 2,
             "eps": 1e-3,

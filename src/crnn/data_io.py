@@ -8,9 +8,20 @@ import torch
 from numpy.typing import NDArray
 from scipy.io import savemat
 
-from .configuration import (DATASET_DIR_ENV_VAR, DynamicIdentificationConfig,
-                            ExperimentBaseConfig, Normalization,
-                            NormalizationParameters)
+from .configuration.base import (
+    DATASET_DIR_ENV_VAR,
+    InputOutput,
+    Normalization,
+    NormalizationParameters,
+)
+
+# from .configuration.base import (
+#     DATASET_DIR_ENV_VAR,
+#     Normalization,
+#     NormalizationParameters,
+#     InputOutput
+# )
+from .configuration.experiment import BaseExperimentConfig, DynamicIdentificationConfig
 from .models.base import ConstrainedModule
 
 
@@ -108,14 +119,18 @@ def save_model_parameter(model: ConstrainedModule, file_name: str) -> None:
     savemat(file_name, par_dict)
 
 
-def save_sequences_to_mat(
-    e_hats: List[NDArray[np.float64]], es: List[NDArray[np.float64]], file_name
-) -> None:
-    savemat(f"{file_name}.mat", {"e_hat": np.array(e_hats), "e": np.array(es)})
+def save_sequences_to_mat(sequences: List[InputOutput], file_name) -> None:
+    e_hats = [s.e_hat for s in sequences]
+    es = [s.e for s in sequences]
+    ds = [s.d for s in sequences]
+    savemat(
+        f"{file_name}.mat",
+        {"e_hat": np.array(e_hats), "e": np.array(es), "d": np.array(ds)},
+    )
 
 
 def write_config(
-    config: Union[ExperimentBaseConfig, DynamicIdentificationConfig], file_name: str
+    config: Union[BaseExperimentConfig, DynamicIdentificationConfig], file_name: str
 ) -> None:
     with open(file_name, "w") as f:
         f.write(config.model_dump_json())

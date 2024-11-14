@@ -1,18 +1,25 @@
 import os
-from typing import Dict, Literal, Tuple
+from typing import Any, Dict, Literal, Tuple
 
 import numpy as np
 import torch
 
-from . import configuration as cfg
 from . import metrics
-from . import tracker as base_tracker
-from .configuration import Normalization
+from .additional_tests import (
+    AdditionalTest,
+    AdditionalTestResult,
+    retrieve_additional_test_class,
+)
+from .configuration.base import InputOutput, Normalization
+from .configuration.experiment import load_configuration
 from .data_io import get_result_directory_name, load_data, load_normalization
 from .datasets import RecurrentWindowHorizonDataset
 from .metrics import retrieve_metric_class
 from .models import base as base_models
 from .models.model_io import get_model_from_config
+from .tracker import events as ev
+from .tracker.base import AggregatedTracker
+from .tracker.io import IoTracker
 from .utils import base as utils
 from .utils import plot
 
@@ -29,11 +36,13 @@ def evaluate(
     result_directory = get_result_directory_name(
         result_base_directory, model_name, experiment_name
     )
-    tracker = base_tracker.BaseTracker(result_directory, model_name, "validation")
-    config = cfg.load_configuration(config_file_name)
+    tracker = AggregatedTracker([IoTracker(result_directory, model_name, "validation")])
+    config = load_configuration(config_file_name)
     experiment_config = config.experiments[experiment_name]
     model_config = config.models[f"{experiment_name}-{model_name}"]
     metrics_config = config.metrics
+    additional_tests_config = config.additional_tests
+    dataset_name = os.path.basename(os.path.dirname(dataset_dir))
 
     test_inputs, test_outputs = load_data(
         experiment_config.input_names, experiment_config.output_names, mode, dataset_dir
@@ -77,8 +86,24 @@ def evaluate(
         metric_class = retrieve_metric_class(metric_config.metric_class)
         metrics[name] = metric_class(metric_config.parameters)
 
+    additional_tests = dict()
+    for name, additional_test_config in additional_tests_config.items():
+        additional_test_class = retrieve_additional_test_class(
+            additional_test_config.test_class
+        )
+        additional_tests[name] = additional_test_class(
+            additional_test_config.parameters, predictor, tracker
+        )
+
     evaluate_model(
-        (initializer, predictor), test_dataset, metrics, normalization, mode, tracker
+        (initializer, predictor),
+        test_dataset,
+        metrics,
+        normalization,
+        mode,
+        additional_tests,
+        dataset_name,
+        tracker,
     )
 
 
@@ -88,16 +113,16 @@ def evaluate_model(
     metrics: Dict[str, metrics.Metrics],
     normalization: Normalization,
     mode: Literal["test", "validation"],
-    tracker: base_tracker.BaseTracker = base_tracker.BaseTracker(),
+    additional_tests: Dict[str, AdditionalTest],
+    dataset_name: str,
+    tracker: AggregatedTracker = AggregatedTracker(),
 ) -> None:
     initializer, predictor = models
 
-    tracker.track(base_tracker.Start(""))
-    tracker.track(
-        base_tracker.Log("", f"Constraints satisfied? {predictor.check_constraints()}")
-    )
+    tracker.track(ev.Start(""))
+    tracker.track(ev.Log("", f"Constraints satisfied? {predictor.check_constraints()}"))
 
-    es, e_hats = [], []
+    es, e_hats, ds = [], [], []
     for _, sample in enumerate(test_dataset):
         if initializer is not None:
             _, h0 = initializer.forward(
@@ -108,28 +133,50 @@ def evaluate_model(
         e_hat, _ = predictor.forward(torch.unsqueeze(torch.tensor(sample["d"]), 0), h0)
         e_hats.append(torch.squeeze(e_hat, 0).detach().numpy())
         es.append(sample["e"])
+        ds.append(sample["d"])
 
     e_hats = utils.denormalize(
         e_hats, normalization.output.mean, normalization.output.std
     )
+    ds = utils.denormalize(ds, normalization.input.mean, normalization.input.std)
+    input_outputs = [
+        InputOutput(d=d, e_hat=e_hat, e=e) for d, e_hat, e in zip(ds, e_hats, es)
+    ]
 
-    results: Dict[str, float] = dict()
+    results: Dict[str, Any] = dict()
+    metrics_result: Dict[str, float] = dict()
     for name, metric in metrics.items():
         e = metric.forward(es, e_hats)
-        tracker.track(base_tracker.Log("", f"{name}: {np.mean(e):.2f}"))
-        results[name] = float(e)
+        tracker.track(ev.Log("", f"{name}: {np.mean(e):.2f}"))
+        metrics_result[name] = float(e)
     results["num_parameters"] = sum(
         p.numel() for p in predictor.parameters() if p.requires_grad
     )
+    results["metrics"] = metrics_result
 
-    tracker.track(base_tracker.SaveSequences("", e_hats, es, "test_output"))
-    tracker.track(
-        base_tracker.Log("", f"Number of parameters: {results['num_parameters']}")
-    )
-    tracker.track(base_tracker.SaveEvaluation("", results, mode))
+    additional_test_results: Dict[str, AdditionalTestResult] = dict()
+    for name, additional_test in additional_tests.items():
+        additional_test_result = additional_test.test(predictor)
+        tracker.track(ev.Log("", f"{name}: {additional_test_result.value:.2f}"))
+        additional_test_results[name] = dict(
+            value=additional_test_result.value,
+            additional=additional_test_result.additional,
+        )
+        tracker.track(
+            ev.SaveSequences(
+                "",
+                additional_test_result.input_output,
+                f"test_output-{name}-{dataset_name}",
+            )
+        )
+    results["additional_tests"] = additional_test_results
+
+    tracker.track(ev.SaveSequences("", input_outputs, f"test_output-{dataset_name}"))
+    tracker.track(ev.Log("", f"Number of parameters: {results['num_parameters']}"))
+    tracker.track(ev.SaveEvaluation("", results, mode))
 
     tracker.track(
-        base_tracker.SaveFig(
+        ev.SaveFig(
             "",
             plot.plot_sequence(
                 [es[0], e_hats[0]], 0.01, f"RMSE {np.mean(e):.2f}", ["e", "e_hat"]
@@ -137,4 +184,4 @@ def evaluate_model(
             "test_output",
         )
     )
-    tracker.track(base_tracker.Stop(""))
+    tracker.track(ev.Stop(""))

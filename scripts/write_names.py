@@ -2,8 +2,8 @@ import argparse
 import json
 import os
 
-from crnn.configuration import (CONFIG_FILE_ENV_VAR, ExperimentConfig,
-                                ExperimentTemplate)
+from crnn.configuration.base import CONFIG_FILE_ENV_VAR
+from crnn.configuration.experiment import ExperimentConfig, ExperimentTemplate
 
 
 def main(directory: str) -> None:

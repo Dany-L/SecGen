@@ -1,11 +1,11 @@
 from typing import Optional, Tuple
 
-from ..configuration import ModelConfiguration, retrieve_model_class
+from ..configuration.experiment import BaseModelConfig, retrieve_model_class
 from .base import ConstrainedModule
 
 
 def get_model_from_config(
-    model_config: ModelConfiguration,
+    model_config: BaseModelConfig,
 ) -> Tuple[ConstrainedModule]:
     predictor: Optional[ConstrainedModule] = None
     initializer: Optional[ConstrainedModule] = None

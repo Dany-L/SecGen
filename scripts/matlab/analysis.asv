@@ -63,8 +63,38 @@ for model_idx =1:length(model_names)
     B2 = X_inv * B2_tilde;
 
     C2 = L^(-1) * C2_tilde;
+    sys = struct('A', A, 'B', B, 'B2', B2, 'C', C, 'D', D, 'D12', D12, 'C2', C2, 'D21', D21);
+    %% calculate rho and M
+    % \|x^k\|<= m rho^k \|x^0\|
+    L1 = [eye(nx),zeros(nx,nw);
+        A, B2];
+    L2 = [zeros(nw,nx) eye(nw);
+            C2, zeros(nz,nw)];
 
-    %% analyze stability
+    x = 0:0.01:1;max_ev=zeros(length(x),1);
+    M_fcn = @(x) L1' * [-X+x*eye(nx), zeros(nx,nx);zeros(nx,nx), X] * L1 + ...
+        L2' * P * L2;
+    ep_star = fsolve(@(x) max(real(eig(M_fcn(x)))), 0);
+%     for x_idx = 1:length(x), max_ev(x_idx) = max(real(eig(M_fcn(x(x_idx))))); end
+%     figure, plot(x,max_ev), grid on
+    fprintf('eps: %f, max eig M(eps): %f\n', ep_star, max(real(eig(M_fcn(ep_star)))))
+
+    % simulate model for a few initial conditions and plot f(k) = m rho^k
+    % \|x^0\|
+    h_stab=20;
+    low=-10;high=-low;
+    m_rho =@(k, x0) sqrt(max(real(eig(X)))/min(real(eig(X)))*(1-ep_star).^k)*norm(x0,2);
+    epochs = 5; e_hats = cell(epochs,1); x0s = cell(epochs,1);ks = 0:1:h_stab-1;
+    figure(), grid on, hold on
+    for e_idx = 1:epochs
+        x0 = low + (high -low).*rand(nx,1); 
+        [e_hat, x] = d_sim(sys,zeros(h_stab,ne),x0,@tanh); 
+        x0s{e_idx,1} = x0;e_hats{e_idx,1} = e_hat;
+        plot(vecnorm(x,2,2)), plot(m_rho(ks,x0), '--')
+    end
+
+
+    %% analyze l2 stability
     L1 = [eye(nx),zeros(nx,nd), zeros(nx,nw);
         A, B, B2];
     L2 = [zeros(nd, nx), eye(ne), zeros(nd, nw);
@@ -94,8 +124,7 @@ for model_idx =1:length(model_names)
     if b_gen
         fprintf('max real eig (H^T H - X): %f\n',max(real(eig(H'*H-X))))
     end
-    %% analyze l2
-    % sector bounds 
+    %% find an upper bound on the l2 gain
     eps=1e-5;
 
     X = sdpvar(nx,nx);
@@ -145,14 +174,7 @@ for model_idx =1:length(model_names)
             
 
     %% simulate
-    x = zeros(h+1,nx);w = zeros(h,nw);e_hat_n = zeros(h,ne);z =zeros(h,nz);
-    x(1,:) = zeros(1,nx); % initial condition
-    for k=1:h
-        z(k,:) = C2 * x(k,:)' + D21 * d_n(k,:)';
-        w(k,:) = dzn(z(k,:));
-        x(k+1,:) = A * x(k,:)' + B * d_n(k,:)' + B2 * w(k,:)';
-        e_hat_n(k,:)= C * x(k,:)' + D * d_n(k,:)' + D12 * w(k,:)';
-    end
+    e_hat_n = d_sim(sys, d_n, zeros(nx,1), @dzn);
     e_hat = e_hat_n .* normalization.output_std + normalization.output_mean;
     results{model_idx} = e_hat;
 

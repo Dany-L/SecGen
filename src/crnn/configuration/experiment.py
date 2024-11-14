@@ -2,37 +2,20 @@ import argparse
 import itertools
 import json
 from dataclasses import dataclass
-from typing import Any, Dict, List, Literal, Tuple, Type
+from typing import Any, Dict, List, Literal, Optional, Tuple, Type
 
 import numpy as np
 from numpy.typing import NDArray
 from pydantic import BaseModel
 
-from .metrics import MetricConfig, retrieve_metric_class
-from .models.base import (DynamicIdentificationConfig,
-                          DynamicIdentificationModel)
-
-CONFIG_FILE_ENV_VAR = "CONFIGURATION"
-DATASET_DIR_ENV_VAR = "DATASET_DIRECTORY"
-RESULT_DIR_ENV_VAR = "RESULT_DIRECTORY"
-FIG_FOLDER_NAME = "fig"
+from ..additional_tests import AdditionalTestConfig, retrieve_additional_test_class
+from ..metrics import MetricConfig, retrieve_metric_class
+from ..models.base import DynamicIdentificationConfig, retrieve_model_class
 
 
-@dataclass
-class NormalizationParameters:
-    mean: NDArray[np.float64]
-    std: NDArray[np.float64]
-
-
-@dataclass
-class Normalization:
-    input: NormalizationParameters
-    output: NormalizationParameters
-
-
-class Duration(BaseModel):
-    duration_str: str
-    duration: float
+class ExperimentAdditionalTest(BaseModel):
+    test_class: str
+    parameters: Dict[str, Any]
 
 
 class ExperimentMetric(BaseModel):
@@ -40,16 +23,25 @@ class ExperimentMetric(BaseModel):
     parameters: Dict[str, Any]
 
 
+class ExperimentModel(BaseModel):
+    m_class: str
+    m_short_name: str
+    parameters: Dict[str, Any]
+
+
+class BaseAdditionalTestConfig(BaseModel):
+    test_class: str
+    parameters: AdditionalTestConfig
+
+
 class BaseMetricConfig(BaseModel):
     metric_class: str
     parameters: MetricConfig
 
 
-class ResultConfig(BaseModel):
-    init_training_time: Duration
-    pred_training_time: Duration
-    number_of_parameters: int
-    metrics: Dict[str, float]
+class BaseModelConfig(BaseModel):
+    m_class: str
+    parameters: DynamicIdentificationConfig
 
 
 class OptimizerConfig(BaseModel):
@@ -62,30 +54,20 @@ class HorizonsConfig(BaseModel):
     testing: int
 
 
-class ModelTemplate(BaseModel):
-    m_class: str
-    m_short_name: str
-    parameters: Dict[str, Any]
-
-
-class ModelConfiguration(BaseModel):
-    m_class: str
-    parameters: DynamicIdentificationConfig
-
-
 class ExperimentSettings(BaseModel):
     experiment_base_name: str
     metrics: Dict[str, ExperimentMetric]
+    additional_tests: Dict[str, ExperimentAdditionalTest]
     static_parameters: Dict[str, Any]
     flexible_parameters: Dict[str, List[Any]]
 
 
 class ExperimentTemplate(BaseModel):
     settings: ExperimentSettings
-    models: List[ModelTemplate]
+    models: List[ExperimentModel]
 
 
-class ExperimentBaseConfig(BaseModel):
+class BaseExperimentConfig(BaseModel):
     epochs: int
     eps: float
     optimizer: OptimizerConfig
@@ -101,15 +83,16 @@ class ExperimentBaseConfig(BaseModel):
 
 
 class ExperimentConfig(BaseModel):
-    experiments: Dict[str, ExperimentBaseConfig]
-    models: Dict[str, ModelConfiguration]
+    experiments: Dict[str, BaseExperimentConfig]
+    models: Dict[str, BaseModelConfig]
     metrics: Dict[str, BaseMetricConfig]
+    additional_tests: Dict[str, BaseAdditionalTestConfig]
     m_names: List[str]
 
     @classmethod
     def from_template(cls, template: ExperimentTemplate) -> "ExperimentConfig":
-        experiments: Dict[str, ExperimentBaseConfig] = dict()
-        models: Dict[str, ModelConfiguration] = dict()
+        experiments: Dict[str, BaseExperimentConfig] = dict()
+        models: Dict[str, BaseModelConfig] = dict()
 
         nd, ne = len(template.settings.static_parameters["input_names"]), len(
             template.settings.static_parameters["output_names"]
@@ -133,7 +116,7 @@ class ExperimentConfig(BaseModel):
                     else:
                         experiment_base_name += f"-{param_value}".replace(".", "")
 
-            experiment_config = ExperimentBaseConfig(
+            experiment_config = BaseExperimentConfig(
                 **{**static_experiment_params, **flexible_experiment_params}
             )
             experiments[experiment_base_name] = experiment_config
@@ -141,7 +124,7 @@ class ExperimentConfig(BaseModel):
             for model in template.models:
                 model_class = retrieve_model_class(model.m_class)
                 models[f"{experiment_base_name}-{model.m_short_name}"] = (
-                    ModelConfiguration(
+                    BaseModelConfig(
                         m_class=model.m_class,
                         parameters=model_class.CONFIG(
                             **{
@@ -167,8 +150,22 @@ class ExperimentConfig(BaseModel):
                 parameters=metric_class.CONFIG(**metric.parameters),
             )
 
+        additional_tests = dict()
+        for name, additional_test in template.settings.additional_tests.items():
+            additional_test_class = retrieve_additional_test_class(
+                additional_test.test_class
+            )
+            additional_tests[name] = BaseAdditionalTestConfig(
+                test_class=additional_test.test_class,
+                parameters=additional_test_class.CONFIG(**additional_test.parameters),
+            )
+
         return cls(
-            experiments=experiments, models=models, metrics=metrics, m_names=model_names
+            experiments=experiments,
+            models=models,
+            metrics=metrics,
+            m_names=model_names,
+            additional_tests=additional_tests,
         )
 
 
@@ -177,26 +174,3 @@ def load_configuration(config_file_name: str) -> ExperimentConfig:
     with open(config_file_name, "r") as file:
         config_data = json.load(file)
     return ExperimentConfig.from_template(ExperimentTemplate(**config_data))
-
-
-def retrieve_model_class(model_class_string: str) -> Type[DynamicIdentificationModel]:
-    # https://stackoverflow.com/a/452981
-    parts = model_class_string.split(".")
-    module_string = ".".join(parts[:-1])
-    module = __import__(module_string)
-
-    cls = getattr(module, parts[1])
-    if len(parts) > 2:
-        for component in parts[2:]:
-            cls = getattr(cls, component)
-
-    if not issubclass(cls, DynamicIdentificationModel):
-        raise ValueError(f"{cls} is not a subclass of DynamicIdentificationModel")
-    return cls  # type: ignore
-
-
-def parse_input(parser: argparse.ArgumentParser) -> Tuple[str, str]:
-    parser.add_argument("experiment_name", type=str, help="Name of the experiment")
-    parser.add_argument("model", type=str, help="Name of the model to train")
-    args = parser.parse_args()
-    return (args.model, args.experiment_name)

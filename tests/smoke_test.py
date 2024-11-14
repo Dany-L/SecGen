@@ -1,6 +1,6 @@
 from crnn.train import train
 from crnn.evaluate import evaluate
-from crnn.configuration import ExperimentConfig, ExperimentTemplate
+from crnn.configuration.experiment import ExperimentConfig, ExperimentTemplate
 import sys
 import os
 import torch
