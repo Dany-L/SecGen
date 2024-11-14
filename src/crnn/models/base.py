@@ -92,11 +92,11 @@ class DynamicIdentificationModel(nn.Module, ABC):
         self,
         d: torch.Tensor,
         x0: Optional[
-            Union[Tuple[torch.Tensor, torch.Tensor], Tuple[torch.Tensor, torch.Tensor]]
+            Union[Tuple[torch.Tensor, torch.Tensor], Tuple[torch.Tensor]]
         ] = None,
     ) -> Tuple[
         torch.Tensor,
-        Union[Tuple[torch.Tensor, torch.Tensor], Tuple[torch.Tensor, torch.Tensor]],
+        Union[Tuple[torch.Tensor, torch.Tensor], Tuple[torch.Tensor]],
     ]:
         pass
 

@@ -156,16 +156,26 @@ def evaluate_model(
 
     additional_test_results: Dict[str, AdditionalTestResult] = dict()
     for name, additional_test in additional_tests.items():
-        additional_test_result = additional_test.test(predictor)
-        tracker.track(ev.Log("", f"{name}: {additional_test_result.value:.2f}"))
+        tracker.track(ev.Log("", f"Running additional test {name}"))
+        result = additional_test.test()
+        tracker.track(ev.Log("", f"{name}: {result.value:.2f}"))
+        tracker.track(
+            ev.SaveFig(
+                "",
+                plot.plot_sequence(
+                    [result.input_output[0].e_hat], 0.01, name, ["e_hat"]
+                ),
+                f"{name}-{dataset_name}",
+            )
+        )
         additional_test_results[name] = dict(
-            value=additional_test_result.value,
-            additional=additional_test_result.additional,
+            value=result.value,
+            additional=result.additional,
         )
         tracker.track(
             ev.SaveSequences(
                 "",
-                additional_test_result.input_output,
+                result.input_output,
                 f"test_output-{name}-{dataset_name}",
             )
         )

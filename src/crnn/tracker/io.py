@@ -4,7 +4,7 @@ import time
 from datetime import datetime
 from typing import Literal
 
-from ..configuration.base import FIG_FOLDER_NAME
+from ..configuration.base import FIG_FOLDER_NAME, SEQ_FOLDER_NAME
 from ..data_io import (
     save_model,
     save_model_parameter,
@@ -79,11 +79,13 @@ class IoTracker:
                 f"Save model parameters as mat file to {self.directory}"
             )
         elif isinstance(event, ev.SaveSequences):
+            seq_subdirectory = os.path.join(self.directory, SEQ_FOLDER_NAME)
+            os.makedirs(seq_subdirectory, exist_ok=True)
             save_sequences_to_mat(
-                event.sequences, os.path.join(self.directory, event.file_name)
+                event.sequences, os.path.join(seq_subdirectory, event.file_name)
             )
             self.write_to_logfile(
-                f"Save sequences to {event.file_name} in {self.directory}"
+                f"Save sequences to {event.file_name} in {seq_subdirectory}"
             )
         elif isinstance(event, ev.SaveConfig):
             write_config(

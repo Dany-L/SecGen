@@ -16,6 +16,13 @@
                     "horizon": 10,
                     "sampling_type": "random"
                 }
+            },        
+            "stability_l2":{
+                "test_class": "crnn.additional_tests.InputOutputStabilityL2",
+                "parameters":{
+                    "epochs": 2,
+                    "horizon": 5
+                }
             }
         },  
         "static_parameters":{
