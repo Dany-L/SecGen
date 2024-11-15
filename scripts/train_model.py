@@ -22,5 +22,5 @@ if __name__ == "__main__":
         result_base_directory,
         model_name,
         experiment_name,
-        gpu
+        gpu,
     )

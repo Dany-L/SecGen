@@ -26,14 +26,16 @@ class MlFlowTracker(BaseTracker):
         type: Literal["training", "validation"] = "training",
     ) -> None:
         super().__init__(config, directory, model_name, type)
-        if hasattr(config, "tracking_uri"):
+        if hasattr(config.parameters, "tracking_uri"):
             # if config.tracking_uri is not None:
-            mlflow.set_tracking_uri(config.tracking_uri)
+            mlflow.set_tracking_uri(config.parameters.tracking_uri)
 
     def track(self, event: ev.Event) -> None:
         if isinstance(event, ev.TrackParameters):
             for key, value in event.parameters.items():
                 mlflow.log_param(key, value)
+        if isinstance(event, ev.TrackParameter):
+            mlflow.log_param(event.name, event.parameter)
         elif isinstance(event, ev.Start):
             experiment_name = os.path.split(pathlib.Path(self.directory).parent.parent)[
                 1

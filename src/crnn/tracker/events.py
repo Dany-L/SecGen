@@ -81,6 +81,12 @@ class TrackParameters(Event):
 
 
 @dataclasses.dataclass
+class TrackParameter(Event):
+    name: str
+    parameter: str
+
+
+@dataclasses.dataclass
 class SaveNormalization(Event):
     input: NormalizationParameters
     output: NormalizationParameters

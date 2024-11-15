@@ -1,4 +1,5 @@
 import os
+import time
 from typing import Optional, Tuple
 
 import numpy as np
@@ -46,6 +47,8 @@ def train(
     tracker.track(ev.Start("", dataset_name))
 
     device = utils.get_device(gpu)
+    tracker.track(ev.TrackParameter("", "device", device))
+    tracker.track(ev.TrackParameter("", "model_class", model_config.m_class))
     tracker.track(ev.Log("", f"Train model {model_name} on {device}."))
 
     train_inputs, train_outputs = load_data(
@@ -73,6 +76,7 @@ def train(
         np.mean(np.vstack(n_train_outputs) < 1e-5)
         and np.std(np.vstack(n_train_outputs)) - 1 < 1e-5
     )
+    start_time = time.time()
     with torch.device(device):
         loaders = get_loaders(
             get_datasets(
@@ -123,6 +127,10 @@ def train(
             raise ValueError(
                 f"Unknown initial_hidden_state: {experiment_config.initial_hidden_state}"
             )
+    stop_time = time.time()
+    training_duration = utils.get_duration_str(start_time, stop_time)
+    tracker.track(ev.Log("", f"Training duration: {training_duration}"))
+    tracker.track(ev.TrackParameter("", "training_duration", training_duration))
     tracker.track(ev.SaveModel("", predictor, "predictor"))
     if initializer is not None:
         tracker.track(ev.SaveModel("", initializer, "initializer"))

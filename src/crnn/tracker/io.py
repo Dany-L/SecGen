@@ -46,12 +46,9 @@ class IoTracker(BaseTracker):
             plot.save_fig(event.fig, event.name, fig_subdirectory)
             self.write_to_logfile(f"save fig {event.name} in {self.directory}")
         elif isinstance(event, ev.Start):
-            self.start_time = time.time()
             self.write_to_logfile(f"--- Start model {self.model_name} ---")
         elif isinstance(event, ev.Stop):
-            self.write_to_logfile(
-                f"--- Stop duration: {utils.get_duration_str(self.start_time, time.time())} ---"
-            )
+            self.write_to_logfile(f"--- Stop ---")
         elif isinstance(event, ev.SaveModel):
             save_model(
                 event.model,
