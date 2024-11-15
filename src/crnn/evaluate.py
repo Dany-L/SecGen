@@ -3,6 +3,7 @@ from typing import Any, Dict, Literal, Tuple
 
 import numpy as np
 import torch
+import time
 
 from . import metrics
 from .additional_tests import (AdditionalTest, AdditionalTestResult,
@@ -98,7 +99,8 @@ def evaluate(
         additional_tests[name] = additional_test_class(
             additional_test_config.parameters, predictor, tracker
         )
-
+    
+    start_time = time.time()
     evaluate_model(
         (initializer, predictor),
         test_dataset,
@@ -109,6 +111,10 @@ def evaluate(
         dataset_name,
         tracker,
     )
+    stop_time = time.time()
+    training_duration = utils.get_duration_str(start_time, stop_time)
+    tracker.track(ev.Log("", f"Evaluation duration: {training_duration}"))
+    tracker.track(ev.TrackParameter("", "evaluation_duration", training_duration))
     tracker.track(ev.Stop(""))
 
 
@@ -148,6 +154,7 @@ def evaluate_model(
         InputOutput(d=d, e_hat=e_hat, e=e) for d, e_hat, e in zip(ds, e_hats, es)
     ]
 
+    
     results: Dict[str, Any] = dict()
     metrics_result: Dict[str, float] = dict()
     for name, metric in metrics.items():

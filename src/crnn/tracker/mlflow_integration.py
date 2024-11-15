@@ -73,7 +73,7 @@ class MlFlowTracker(BaseTracker):
                     tracker_config_file_name,
                     mode="w",
                 ) as f:
-                    f.write(tracker_config.model_dump_json())
+                    f.write(tracker_config.parameters.model_dump_json())
 
     def load_tracking_configuration(self, event: ev.LoadTrackingConfiguration) -> None:
         config_file = os.path.join(
