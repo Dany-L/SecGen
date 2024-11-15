@@ -82,8 +82,7 @@ class MlFlowTracker(BaseTracker):
         if os.path.exists(config_file):
             with open(config_file, "r") as f:
                 config = json.load(f)
-            raw_config = ExperimentTracker(**config)
-            tracker_config = self.CONFIG(**raw_config.parameters)
+            tracker_config = self.CONFIG(**config)
             mlflow.start_run(run_id=tracker_config.id)
 
 
