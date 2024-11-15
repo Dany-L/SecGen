@@ -19,7 +19,7 @@ dependencies = [
     "pydantic",
     "matplotlib",
     "mosek",
-    "tikzplotlib"
+    "mlflow"
 ]
 [project.optional-dependencies]
 test = [

@@ -3,7 +3,7 @@ from typing import List, Optional
 
 import matplotlib.pyplot as plt
 import numpy as np
-import tikzplotlib
+# import tikzplotlib
 from matplotlib.figure import Figure
 from numpy.typing import NDArray
 
@@ -34,5 +34,5 @@ def save_fig(fig: Figure, name: str, directory: str) -> None:
     # save png
     fig.savefig(os.path.join(directory, f"{name}.jpg"))
     # save tex
-    tikzplotlib.save(os.path.join(directory, f"{name}.tex"))
+    # tikzplotlib.save(os.path.join(directory, f"{name}.tex"))
     plt.close(fig)
