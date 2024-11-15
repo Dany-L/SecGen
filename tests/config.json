@@ -8,6 +8,18 @@
                 }
             }
         },
+        "trackers":{
+            "io":{
+                "tracker_class": "crnn.tracker.io.IoTracker",
+                "parameters":{
+                }
+            },
+            "mlflow":{
+                "tracker_class": "crnn.tracker.mlflow_integration.MlFlowTracker",
+                "parameters":{
+                }
+            }
+        },
         "additional_tests":{
             "stability_evaluation":{
                 "test_class": "crnn.additional_tests.StabilityOfInitialState",

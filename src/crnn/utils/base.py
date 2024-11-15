@@ -37,7 +37,7 @@ def get_model_file_name(name: str, model_name: str) -> str:
 
 
 def get_config_file_name(name: str, model_name: str) -> str:
-    return f"config-{name}-{model_name}.json"
+    return f"config-{name}-{model_name}"
 
 
 def get_opt_values(

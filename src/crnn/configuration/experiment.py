@@ -1,16 +1,14 @@
-import argparse
 import itertools
 import json
-from dataclasses import dataclass
-from typing import Any, Dict, List, Literal, Optional, Tuple, Type
+from typing import Any, Dict, List, Literal
 
-import numpy as np
-from numpy.typing import NDArray
 from pydantic import BaseModel
 
-from ..additional_tests import AdditionalTestConfig, retrieve_additional_test_class
+from ..additional_tests import (AdditionalTestConfig,
+                                retrieve_additional_test_class)
 from ..metrics import MetricConfig, retrieve_metric_class
 from ..models.base import DynamicIdentificationConfig, retrieve_model_class
+from ..tracker.base import BaseTrackerConfig, retrieve_tracker_class
 
 
 class ExperimentAdditionalTest(BaseModel):
@@ -23,6 +21,11 @@ class ExperimentMetric(BaseModel):
     parameters: Dict[str, Any]
 
 
+class ExperimentTracker(BaseModel):
+    tracker_class: str
+    parameters: Dict[str, Any]
+
+
 class ExperimentModel(BaseModel):
     m_class: str
     m_short_name: str
@@ -32,6 +35,11 @@ class ExperimentModel(BaseModel):
 class BaseAdditionalTestConfig(BaseModel):
     test_class: str
     parameters: AdditionalTestConfig
+
+
+class BaseTrackerConfig(BaseModel):
+    tracker_class: str
+    parameters: BaseTrackerConfig
 
 
 class BaseMetricConfig(BaseModel):
@@ -57,6 +65,7 @@ class HorizonsConfig(BaseModel):
 class ExperimentSettings(BaseModel):
     experiment_base_name: str
     metrics: Dict[str, ExperimentMetric]
+    trackers: Dict[str, ExperimentTracker]
     additional_tests: Dict[str, ExperimentAdditionalTest]
     static_parameters: Dict[str, Any]
     flexible_parameters: Dict[str, List[Any]]
@@ -85,6 +94,7 @@ class BaseExperimentConfig(BaseModel):
 class ExperimentConfig(BaseModel):
     experiments: Dict[str, BaseExperimentConfig]
     models: Dict[str, BaseModelConfig]
+    trackers: Dict[str, BaseTrackerConfig]
     metrics: Dict[str, BaseMetricConfig]
     additional_tests: Dict[str, BaseAdditionalTestConfig]
     m_names: List[str]
@@ -159,6 +169,13 @@ class ExperimentConfig(BaseModel):
                 test_class=additional_test.test_class,
                 parameters=additional_test_class.CONFIG(**additional_test.parameters),
             )
+        trackers = dict()
+        for name, tracker in template.settings.trackers.items():
+            tracker_class = retrieve_tracker_class(tracker.tracker_class)
+            trackers[name] = BaseTrackerConfig(
+                tracker_class=tracker.tracker_class,
+                parameters=tracker_class.CONFIG(**tracker.parameters),
+            )
 
         return cls(
             experiments=experiments,
@@ -166,6 +183,7 @@ class ExperimentConfig(BaseModel):
             metrics=metrics,
             m_names=model_names,
             additional_tests=additional_tests,
+            trackers=trackers,
         )
 
 

@@ -1,6 +1,6 @@
 import json
 import os
-from typing import List, Literal, Tuple, Union
+from typing import Any, Dict, List, Literal, Tuple
 
 import numpy as np
 import pandas as pd
@@ -8,20 +8,8 @@ import torch
 from numpy.typing import NDArray
 from scipy.io import savemat
 
-from .configuration.base import (
-    DATASET_DIR_ENV_VAR,
-    InputOutput,
-    Normalization,
-    NormalizationParameters,
-)
-
-# from .configuration.base import (
-#     DATASET_DIR_ENV_VAR,
-#     Normalization,
-#     NormalizationParameters,
-#     InputOutput
-# )
-from .configuration.experiment import BaseExperimentConfig, DynamicIdentificationConfig
+from .configuration.base import (DATASET_DIR_ENV_VAR, InputOutput,
+                                 Normalization, NormalizationParameters)
 from .models.base import ConstrainedModule
 
 
@@ -129,11 +117,9 @@ def save_sequences_to_mat(sequences: List[InputOutput], file_name) -> None:
     )
 
 
-def write_config(
-    config: Union[BaseExperimentConfig, DynamicIdentificationConfig], file_name: str
-) -> None:
+def write_dict_to_json(config: Dict[str, Any], file_name: str) -> None:
     with open(file_name, "w") as f:
-        f.write(config.model_dump_json())
+        json.dump(config, f)
 
 
 def load_normalization(directory: str) -> Normalization:

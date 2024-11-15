@@ -5,11 +5,8 @@ import numpy as np
 import torch
 
 from . import metrics
-from .additional_tests import (
-    AdditionalTest,
-    AdditionalTestResult,
-    retrieve_additional_test_class,
-)
+from .additional_tests import (AdditionalTest, AdditionalTestResult,
+                               retrieve_additional_test_class)
 from .configuration.base import InputOutput, Normalization
 from .configuration.experiment import load_configuration
 from .data_io import get_result_directory_name, load_data, load_normalization
@@ -18,8 +15,7 @@ from .metrics import retrieve_metric_class
 from .models import base as base_models
 from .models.model_io import get_model_from_config
 from .tracker import events as ev
-from .tracker.base import AggregatedTracker
-from .tracker.io import IoTracker
+from .tracker.base import AggregatedTracker, get_trackers_from_config
 from .utils import base as utils
 from .utils import plot
 
@@ -36,13 +32,21 @@ def evaluate(
     result_directory = get_result_directory_name(
         result_base_directory, model_name, experiment_name
     )
-    tracker = AggregatedTracker([IoTracker(result_directory, model_name, "validation")])
     config = load_configuration(config_file_name)
+    trackers_config = config.trackers
     experiment_config = config.experiments[experiment_name]
-    model_config = config.models[f"{experiment_name}-{model_name}"]
+    model_name = f"{experiment_name}-{model_name}"
+    model_config = config.models[model_name]
     metrics_config = config.metrics
     additional_tests_config = config.additional_tests
+
     dataset_name = os.path.basename(os.path.dirname(dataset_dir))
+
+    trackers = get_trackers_from_config(
+        trackers_config, result_directory, model_name, "validation"
+    )
+    tracker = AggregatedTracker(trackers)
+    tracker.track(ev.LoadTrackingConfiguration("", result_directory, model_name))
 
     test_inputs, test_outputs = load_data(
         experiment_config.input_names, experiment_config.output_names, mode, dataset_dir
@@ -105,6 +109,7 @@ def evaluate(
         dataset_name,
         tracker,
     )
+    tracker.track(ev.Stop(""))
 
 
 def evaluate_model(
@@ -119,7 +124,7 @@ def evaluate_model(
 ) -> None:
     initializer, predictor = models
 
-    tracker.track(ev.Start(""))
+    tracker.track(ev.Start("", dataset_name))
     tracker.track(ev.Log("", f"Constraints satisfied? {predictor.check_constraints()}"))
 
     es, e_hats, ds = [], [], []
@@ -148,6 +153,7 @@ def evaluate_model(
     for name, metric in metrics.items():
         e = metric.forward(es, e_hats)
         tracker.track(ev.Log("", f"{name}: {np.mean(e):.2f}"))
+        tracker.track(ev.TrackMetrics("", {name: float(np.mean(e))}))
         metrics_result[name] = float(e)
     results["num_parameters"] = sum(
         p.numel() for p in predictor.parameters() if p.requires_grad
@@ -183,7 +189,8 @@ def evaluate_model(
 
     tracker.track(ev.SaveSequences("", input_outputs, f"test_output-{dataset_name}"))
     tracker.track(ev.Log("", f"Number of parameters: {results['num_parameters']}"))
-    tracker.track(ev.SaveEvaluation("", results, mode))
+
+    tracker.track(ev.TrackParameters("", f"{mode}-eval", results))
 
     tracker.track(
         ev.SaveFig(
@@ -194,4 +201,3 @@ def evaluate_model(
             "test_output",
         )
     )
-    tracker.track(ev.Stop(""))

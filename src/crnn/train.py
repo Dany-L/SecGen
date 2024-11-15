@@ -1,3 +1,4 @@
+import os
 from typing import Optional, Tuple
 
 import numpy as np
@@ -14,7 +15,7 @@ from .models import base
 from .models.model_io import get_model_from_config
 from .optimizer import get_optimizer
 from .tracker import events as ev
-from .tracker.base import AggregatedTracker
+from .tracker.base import AggregatedTracker, get_trackers_from_config
 from .tracker.io import IoTracker
 from .utils import base as utils
 from .utils import plot
@@ -30,11 +31,19 @@ def train(
     result_directory = get_result_directory_name(
         result_base_directory, model_name, experiment_name
     )
-    tracker = AggregatedTracker([IoTracker(result_directory, model_name, "validation")])
 
     config = load_configuration(config_file_name)
     experiment_config = config.experiments[experiment_name]
-    model_config = config.models[f"{experiment_name}-{model_name}"]
+    model_name = f"{experiment_name}-{model_name}"
+    model_config = config.models[model_name]
+    trackers_config = config.trackers
+    dataset_name = os.path.basename(os.path.dirname(dataset_dir))
+
+    trackers = get_trackers_from_config(
+        trackers_config, result_directory, model_name, "training"
+    )
+    tracker = AggregatedTracker(trackers)
+    tracker.track(ev.Start("", dataset_name))
 
     train_inputs, train_outputs = load_data(
         experiment_config.input_names,
@@ -114,8 +123,24 @@ def train(
     if initializer is not None:
         tracker.track(ev.SaveModel("", initializer, "initializer"))
     tracker.track(ev.SaveModelParameter("", predictor))
-    tracker.track(ev.SaveConfig("", "experiment", experiment_config))
-    tracker.track(ev.SaveConfig("", "model", model_config.parameters))
+    tracker.track(
+        ev.TrackParameters(
+            "",
+            utils.get_config_file_name("experiment", model_name),
+            experiment_config.model_dump(),
+        )
+    )
+    tracker.track(
+        ev.TrackParameters(
+            "",
+            utils.get_config_file_name("model", model_name),
+            model_config.parameters.model_dump(),
+        )
+    )
+    tracker.track(
+        ev.SaveTrackingConfiguration("", trackers_config, model_name, result_directory)
+    )
+    tracker.track(ev.Stop(""))
 
 
 def train_joint(
@@ -135,7 +160,6 @@ def train_joint(
     tracker.track(ev.Log("", f"Initialize parameters: {problem_status}"))
     predictor.set_lure_system()
     predictor.train()
-    tracker.track(ev.Start(""))
 
     for epoch in range(epochs):
         loss = 0
@@ -168,7 +192,7 @@ def train_joint(
             tracker.track(ev.Log("", f"Projecting parameters: {problem_status}"))
             predictor.set_lure_system()
         tracker.track(ev.Log("", f"{epoch}/{epochs}\t l= {loss:.2f}"))
-    tracker.track(ev.Stop(""))
+        tracker.track(ev.TrackMetrics("", {"epoch.loss.predictor": float(loss)}, epoch))
 
     return (initializer, predictor)
 
@@ -187,7 +211,6 @@ def train_zero(
     predictor.initialize_parameters()
     predictor.set_lure_system()
     predictor.train()
-    tracker.track(ev.Start(""))
 
     for epoch in range(epochs):
         loss = 0
@@ -213,7 +236,7 @@ def train_zero(
             tracker.track(ev.Log("", f"Projecting parameters: {problem_status}"))
             predictor.set_lure_system()
         tracker.track(ev.Log("", f"{epoch}/{epochs}\t l= {loss:.2f}"))
-    tracker.track(ev.Stop(""))
+        tracker.track(ev.TrackMetrics("", {"epoch.loss.predictor": float(loss)}, epoch))
 
     return (None, predictor)
 
@@ -236,7 +259,6 @@ def train_separate(
     tracker.track(ev.Log("", f"Initialize parameters: {problem_status}"))
     predictor.set_lure_system()
     predictor.train()
-    tracker.track(ev.Start(""))
 
     # initializer
     for epoch in range(epochs):
@@ -251,6 +273,9 @@ def train_separate(
             loss += batch_loss.item()
 
         tracker.track(ev.Log("", f"{epoch}/{epochs} (initializer)\t l= {loss:.2f}"))
+        tracker.track(
+            ev.TrackMetrics("", {"epoch.loss.initializer": float(loss)}, epoch)
+        )
 
     # predictor
     for epoch in range(epochs):
@@ -282,6 +307,6 @@ def train_separate(
             predictor.set_lure_system()
 
         tracker.track(ev.Log("", f"{epoch}/{epochs} (predictor)\t l= {loss:.2f}"))
-    tracker.track(ev.Stop(""))
+        tracker.track(ev.TrackMetrics("", {"epoch.loss.predictor": float(loss)}, epoch))
 
     return (initializer, predictor)

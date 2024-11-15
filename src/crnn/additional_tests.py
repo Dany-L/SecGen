@@ -11,7 +11,6 @@ from .models.base import DynamicIdentificationModel
 from .models.recurrent import BasicLstm, BasicRnn
 from .tracker import events as ev
 from .tracker.base import AggregatedTracker
-from .utils.plot import plot_sequence
 
 
 class AdditionalTestConfig(BaseModel):
@@ -82,6 +81,11 @@ class StabilityOfInitialState(AdditionalTest):
                     f"{epoch}/{self.epochs}: xk norm: {xk_norm.cpu().detach().numpy():.2f}",
                 )
             )
+            self.tracker.track(
+                ev.TrackMetrics(
+                    "", {"eval.xk_norm": float(xk_norm.cpu().detach().numpy())}, epoch
+                )
+            )
 
             if xk_norm > xk_norm_max:
                 xk_norm_max, x0_max, e_hat_max = (
@@ -125,6 +129,11 @@ class InputOutputStabilityL2(AdditionalTest):
                 ev.Log(
                     "",
                     f"{epoch}/{self.epochs}: ga: {np.sqrt(ga_2.cpu().detach().numpy()):.2f}",
+                )
+            )
+            self.tracker.track(
+                ev.TrackMetrics(
+                    "", {"eval.ga": float(np.sqrt(ga_2.cpu().detach().numpy()))}, epoch
                 )
             )
         return AdditionalTestResult(

@@ -9,7 +9,6 @@ import json
 torch.set_default_dtype(torch.double)
 
 root_dir = os.path.split(os.path.abspath(sys.argv[0]))[0]
-print(root_dir)
 result_directory = os.path.join(root_dir, "_tmp/results")
 configuration_file = os.path.join(root_dir, "config.json")
 data_directory = os.path.join(root_dir, "data")

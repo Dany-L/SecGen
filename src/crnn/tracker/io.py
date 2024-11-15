@@ -5,28 +5,20 @@ from datetime import datetime
 from typing import Literal
 
 from ..configuration.base import FIG_FOLDER_NAME, SEQ_FOLDER_NAME
-from ..data_io import (
-    save_model,
-    save_model_parameter,
-    save_sequences_to_mat,
-    write_config,
-)
+from ..data_io import (save_model, save_model_parameter, save_sequences_to_mat,
+                       write_dict_to_json)
 from ..utils import base as utils
 from ..utils import plot
 from . import events as ev
-from .base import Event
+from .base import BaseTracker, BaseTrackerConfig, Event
 
 
-class IoTracker:
-    def __init__(
-        self,
-        directory: str = os.environ["HOME"],
-        model_name: str = "",
-        type: Literal["training", "validation"] = "training",
-    ) -> None:
-        self.directory = directory
-        self.model_name = model_name
-        self.log_file_path = str(os.path.join(self.directory, f"{type}.log"))
+class IoTrackerConfig(BaseTrackerConfig):
+    pass
+
+
+class IoTracker(BaseTracker):
+    CONFIG = IoTrackerConfig
 
     def track(self, event: Event) -> None:
         if isinstance(event, ev.Log):
@@ -87,26 +79,15 @@ class IoTracker:
             self.write_to_logfile(
                 f"Save sequences to {event.file_name} in {seq_subdirectory}"
             )
-        elif isinstance(event, ev.SaveConfig):
-            write_config(
-                event.config,
+        elif isinstance(event, ev.TrackParameters):
+            write_dict_to_json(
+                event.parameters,
                 os.path.join(
                     self.directory,
-                    utils.get_config_file_name(event.name, self.model_name),
+                    f"{event.name}.json",
                 ),
             )
             self.write_to_logfile(f"Save model config json file to {self.directory}")
-        elif isinstance(event, ev.SaveEvaluation):
-            with open(
-                os.path.join(
-                    self.directory, f"evaluate-{self.model_name}-{event.mode}.json"
-                ),
-                "w",
-            ) as f:
-                json.dump(event.results, f)
-            self.write_to_logfile(f"Save evaluation results to {self.directory}")
-        else:
-            raise ValueError(f"Event is not defined {event}")
 
     def write_to_logfile(self, msg: str) -> None:
         with open(self.log_file_path, "a") as f:
