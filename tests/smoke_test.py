@@ -5,6 +5,7 @@ import sys
 import os
 import torch
 import json
+import itertools
 
 torch.set_default_dtype(torch.double)
 
@@ -20,15 +21,17 @@ config = ExperimentConfig.from_template(ExperimentTemplate(**config_dict))
 model_names = config.m_names
 experiment_names = list(config.experiments.keys())
 
-for model_name in model_names:
+par = itertools.product(model_names,[True, False])
+
+for model_name, gpu in par:
     for experiment_name in experiment_names:
-        print(f"Experiment: {experiment_name}, Model: {model_name}")
         train(
             configuration_file,
             data_directory,
             result_directory,
             model_name,
             experiment_name,
+            gpu
         )
         evaluate(
             configuration_file,

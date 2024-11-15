@@ -16,7 +16,6 @@ from .models.model_io import get_model_from_config
 from .optimizer import get_optimizer
 from .tracker import events as ev
 from .tracker.base import AggregatedTracker, get_trackers_from_config
-from .tracker.io import IoTracker
 from .utils import base as utils
 from .utils import plot
 
@@ -27,6 +26,7 @@ def train(
     result_base_directory: str,
     model_name: str,
     experiment_name: str,
+    gpu: bool,
 ) -> None:
     result_directory = get_result_directory_name(
         result_base_directory, model_name, experiment_name
@@ -44,6 +44,9 @@ def train(
     )
     tracker = AggregatedTracker(trackers)
     tracker.track(ev.Start("", dataset_name))
+
+    device = utils.get_device(gpu)
+    tracker.track(ev.Log("", f"Train model {model_name} on {device}."))
 
     train_inputs, train_outputs = load_data(
         experiment_config.input_names,
@@ -70,55 +73,56 @@ def train(
         np.mean(np.vstack(n_train_outputs) < 1e-5)
         and np.std(np.vstack(n_train_outputs)) - 1 < 1e-5
     )
-
-    loaders = get_loaders(
-        get_datasets(
-            n_train_inputs,
-            n_train_outputs,
-            experiment_config.horizons.training,
-            experiment_config.window,
-        ),
-        experiment_config.batch_size,
-    )
-
-    initializer, predictor = get_model_from_config(model_config)
-
-    optimizers = get_optimizer(
-        experiment_config, (initializer.parameters(), predictor.parameters())
-    )
-    loss_fcn = get_loss_function(experiment_config.loss_function)
-
-    if experiment_config.initial_hidden_state == "zero":
-        (initializer, predictor) = train_zero(
-            models=(initializer, predictor),
-            loaders=loaders,
-            epochs=experiment_config.epochs,
-            optimizers=optimizers,
-            loss_function=loss_fcn,
-            tracker=tracker,
+    with torch.device(device):
+        loaders = get_loaders(
+            get_datasets(
+                n_train_inputs,
+                n_train_outputs,
+                experiment_config.horizons.training,
+                experiment_config.window,
+            ),
+            experiment_config.batch_size,
+            device,
         )
-    elif experiment_config.initial_hidden_state == "joint":
-        (initializer, predictor) = train_joint(
-            models=(initializer, predictor),
-            loaders=loaders,
-            epochs=experiment_config.epochs,
-            optimizers=optimizers,
-            loss_function=loss_fcn,
-            tracker=tracker,
+
+        initializer, predictor = get_model_from_config(model_config)
+
+        optimizers = get_optimizer(
+            experiment_config, (initializer.parameters(), predictor.parameters())
         )
-    elif experiment_config.initial_hidden_state == "separate":
-        (initializer, predictor) = train_separate(
-            models=(initializer, predictor),
-            loaders=loaders,
-            epochs=experiment_config.epochs,
-            optimizers=optimizers,
-            loss_function=loss_fcn,
-            tracker=tracker,
-        )
-    else:
-        raise ValueError(
-            f"Unknown initial_hidden_state: {experiment_config.initial_hidden_state}"
-        )
+        loss_fcn = get_loss_function(experiment_config.loss_function)
+
+        if experiment_config.initial_hidden_state == "zero":
+            (initializer, predictor) = train_zero(
+                models=(initializer, predictor),
+                loaders=loaders,
+                epochs=experiment_config.epochs,
+                optimizers=optimizers,
+                loss_function=loss_fcn,
+                tracker=tracker,
+            )
+        elif experiment_config.initial_hidden_state == "joint":
+            (initializer, predictor) = train_joint(
+                models=(initializer, predictor),
+                loaders=loaders,
+                epochs=experiment_config.epochs,
+                optimizers=optimizers,
+                loss_function=loss_fcn,
+                tracker=tracker,
+            )
+        elif experiment_config.initial_hidden_state == "separate":
+            (initializer, predictor) = train_separate(
+                models=(initializer, predictor),
+                loaders=loaders,
+                epochs=experiment_config.epochs,
+                optimizers=optimizers,
+                loss_function=loss_fcn,
+                tracker=tracker,
+            )
+        else:
+            raise ValueError(
+                f"Unknown initial_hidden_state: {experiment_config.initial_hidden_state}"
+            )
     tracker.track(ev.SaveModel("", predictor, "predictor"))
     if initializer is not None:
         tracker.track(ev.SaveModel("", initializer, "initializer"))
@@ -180,7 +184,10 @@ def train_joint(
             loss += batch_loss.item()
         if epoch % 50 == 0:
             fig = plot.plot_sequence(
-                [e_hat[0, :].detach().numpy(), batch["e"][0, :].detach().numpy()],
+                [
+                    e_hat[0, :].cpu().detach().numpy(),
+                    batch["e"][0, :].cpu().detach().numpy(),
+                ],
                 0.01,
                 title="normalized output",
                 legend=[r"$\hat e$", r"$e$"],
@@ -224,7 +231,10 @@ def train_zero(
             loss += batch_loss.item()
         if epoch % 50 == 0:
             fig = plot.plot_sequence(
-                [e_hat[0, :].detach().numpy(), batch["e"][0, :].detach().numpy()],
+                [
+                    e_hat[0, :].cpu().detach().numpy(),
+                    batch["e"][0, :].cpu().detach().numpy(),
+                ],
                 0.01,
                 title="normalized output",
                 legend=[r"$\hat e$", r"$e$"],
@@ -294,7 +304,10 @@ def train_separate(
 
         if epoch % 50 == 0:
             fig = plot.plot_sequence(
-                [e_hat[0, :].detach().numpy(), batch["e"][0, :].detach().numpy()],
+                [
+                    e_hat[0, :].cpu().cpu().detach().numpy(),
+                    batch["e"][0, :].cpu().detach().numpy(),
+                ],
                 0.01,
                 title="normalized output",
                 legend=[r"$\hat e$", r"$e$"],

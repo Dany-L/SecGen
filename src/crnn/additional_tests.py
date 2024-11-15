@@ -96,18 +96,19 @@ class StabilityOfInitialState(AdditionalTest):
 
         return AdditionalTestResult(
             float(xk_norm_max.cpu().detach().numpy()),
-            [InputOutput(d=d, e_hat=e_hat_max)],
-            {
-                "x0": np.hstack(
-                    [x0_i.cpu().detach().numpy() for x0_i in x0_max]
-                ).tolist()
-            },
+            [
+                InputOutput(
+                    d=d.cpu().detach().numpy(),
+                    e_hat=e_hat_max,
+                    x0=np.hstack([x0_i.cpu().detach().numpy() for x0_i in x0_max]),
+                )
+            ],
+            {},
         )
 
 
 class InputOutputStabilityL2(AdditionalTest):
     def test(self) -> AdditionalTestResult:
-        x0 = get_x0(self.model, self.B)  # get random initial state
         d = torch.randn(self.B, self.horizon, self.nd)
         d.requires_grad = True
         ga_2_max, e_hat_max, d_max = (

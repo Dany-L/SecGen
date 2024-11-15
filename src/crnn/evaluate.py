@@ -136,7 +136,7 @@ def evaluate_model(
         else:
             h0 = None
         e_hat, _ = predictor.forward(torch.unsqueeze(torch.tensor(sample["d"]), 0), h0)
-        e_hats.append(torch.squeeze(e_hat, 0).detach().numpy())
+        e_hats.append(torch.squeeze(e_hat, 0).cpu().detach().numpy())
         es.append(sample["e"])
         ds.append(sample["d"])
 

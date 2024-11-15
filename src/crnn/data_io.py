@@ -103,7 +103,7 @@ def save_model(model: ConstrainedModule, directory_name: str, file_name: str) ->
 def save_model_parameter(model: ConstrainedModule, file_name: str) -> None:
     par_dict = {}
     for name, var in model.named_parameters():
-        par_dict[name] = var.detach().numpy()
+        par_dict[name] = var.cpu().detach().numpy()
     savemat(file_name, par_dict)
 
 
@@ -111,9 +111,15 @@ def save_sequences_to_mat(sequences: List[InputOutput], file_name) -> None:
     e_hats = [s.e_hat for s in sequences]
     es = [s.e for s in sequences]
     ds = [s.d for s in sequences]
+    x0s = [s.x0 for s in sequences]
     savemat(
         f"{file_name}.mat",
-        {"e_hat": np.array(e_hats), "e": np.array(es), "d": np.array(ds)},
+        {
+            "e_hat": np.array(e_hats),
+            "e": np.array(es),
+            "d": np.array(ds),
+            "x0": np.array(x0s),
+        },
     )
 
 

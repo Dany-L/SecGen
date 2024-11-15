@@ -1,6 +1,7 @@
 from typing import Dict, List, Tuple
 
 import numpy as np
+import torch
 from numpy.typing import NDArray
 from torch.utils.data import DataLoader, Dataset
 
@@ -157,10 +158,17 @@ def get_datasets(
 def get_loaders(
     datasets: Tuple[Dataset],
     batch_size: int,
+    device: torch.device = torch.device("cpu"),
     drop_last: bool = True,
     shuffle: bool = True,
 ) -> Tuple[DataLoader]:
     return (
-        DataLoader(dataset, batch_size, drop_last=drop_last, shuffle=shuffle)
+        DataLoader(
+            dataset,
+            batch_size,
+            drop_last=drop_last,
+            shuffle=shuffle,
+            generator=torch.Generator(device=device),
+        )
         for dataset in datasets
     )

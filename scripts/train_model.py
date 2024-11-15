@@ -10,7 +10,7 @@ torch.set_default_dtype(torch.double)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train a CRNN model.")
-    model_name, experiment_name = cfg.parse_input(parser)
+    model_name, experiment_name, gpu = cfg.parse_input(parser)
 
     result_base_directory = os.path.expanduser(os.getenv(cfg.RESULT_DIR_ENV_VAR))
     dataset_dir = os.path.expanduser(os.getenv(cfg.DATASET_DIR_ENV_VAR))
@@ -22,4 +22,5 @@ if __name__ == "__main__":
         result_base_directory,
         model_name,
         experiment_name,
+        gpu
     )

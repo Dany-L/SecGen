@@ -2,7 +2,6 @@ import json
 import os
 import time
 from datetime import datetime
-from typing import Literal
 
 from ..configuration.base import FIG_FOLDER_NAME, SEQ_FOLDER_NAME
 from ..data_io import (save_model, save_model_parameter, save_sequences_to_mat,

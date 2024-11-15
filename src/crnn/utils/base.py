@@ -2,6 +2,7 @@ from typing import List, Tuple, Union
 
 import cvxpy as cp
 import numpy as np
+import torch
 from numpy.typing import NDArray
 
 
@@ -46,3 +47,11 @@ def get_opt_values(
     if isinstance(opt_vars, cp.Expression):
         return opt_vars.value
     return opt_vars
+
+
+def get_device(gpu: bool) -> torch.device:
+    if gpu and torch.cuda.is_available():
+        device = torch.device("cuda")
+    else:
+        device = torch.device("cpu")
+    return device

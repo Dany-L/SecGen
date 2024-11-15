@@ -83,7 +83,7 @@ class SectorBoundedLtiRnn(base.ConstrainedModule):
         M = cp.bmat([[M11, M21.T], [M21, M22]])
         nM = M.shape[0]
         eps = 1e-3
-        M0 = -self.sdp_constraints()[0]().detach().numpy()
+        M0 = -self.sdp_constraints()[0]().cpu().detach().numpy()
         problem = cp.Problem(
             cp.Minimize(cp.norm(M0 - M)),
             [M << -eps * np.eye(nM), *multiplier_constraints],
@@ -195,9 +195,9 @@ class GeneralSectorBoundedLtiRnn(base.ConstrainedModule):
         M22 = -X
         M = cp.bmat([[M11, M21.T], [M21, M22]])
         nM = M.shape[0]
-        M0 = -self.sdp_constraints()[0]().detach().numpy()
+        M0 = -self.sdp_constraints()[0]().cpu().detach().numpy()
         M_gen = cp.bmat([[-np.eye(self.nz), H.T], [H, -X]])
-        M_gen0 = -self.sdp_constraints()[1]().detach().numpy()
+        M_gen0 = -self.sdp_constraints()[1]().cpu().detach().numpy()
         eps = 1e-3
         problem = cp.Problem(
             cp.Minimize(cp.norm(M - M0) + cp.norm(M_gen - M_gen0)),

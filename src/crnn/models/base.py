@@ -140,25 +140,41 @@ class ConstrainedModule(DynamicIdentificationModel):
         else:
             raise NotImplementedError(f"Unsupported multiplier: {config.multiplier}")
 
+        mean = 0.0
         self.A_tilde = torch.nn.Parameter(torch.zeros((self.nx, self.nx)))
         self.B = torch.nn.Parameter(
-            torch.normal(0, 1 / self.nx, size=(self.nx, self.nd))
+            torch.normal(
+                mean * torch.ones((self.nx, self.nd)),
+                1 / self.nx * torch.ones((self.nx, self.nd)),
+            )
         )
         self.B2_tilde = torch.nn.Parameter(torch.zeros((self.nx, self.nw)))
 
         self.C = torch.nn.Parameter(
-            torch.normal(0, 1 / self.ne, size=(self.ne, self.nx))
+            torch.normal(
+                mean * torch.ones((self.ne, self.nx)),
+                1 / self.ne * torch.ones((self.ne, self.nx)),
+            )
         )
         self.D = torch.nn.Parameter(
-            torch.normal(0, 1 / self.ne, size=(self.ne, self.nd))
+            torch.normal(
+                mean * torch.ones((self.ne, self.nd)),
+                1 / self.ne * torch.ones((self.ne, self.nd)),
+            )
         )
         self.D12 = torch.nn.Parameter(
-            torch.normal(0, 1 / self.ne, size=(self.ne, self.nw))
+            torch.normal(
+                mean * torch.ones((self.ne, self.nw)),
+                1 / self.ne * torch.ones((self.ne, self.nw)),
+            )
         )
 
         self.C2_tilde = torch.nn.Parameter(torch.zeros((self.nz, self.nx)))
         self.D21 = torch.nn.Parameter(
-            torch.normal(0, 1 / self.nz, size=(self.nz, self.nd))
+            torch.normal(
+                mean * torch.ones((self.nz, self.nd)),
+                1 / self.nz * torch.ones((self.nz, self.nd)),
+            )
         )
         self.D22 = torch.zeros((self.nz, self.nw))
 
@@ -330,7 +346,7 @@ class LureSystem(Linear):
 
 
 def load_model(model: ConstrainedModule, model_file_name: str) -> ConstrainedModule:
-    model.load_state_dict(torch.load(model_file_name))
+    model.load_state_dict(torch.load(model_file_name, weights_only=True))
     model.set_lure_system()
     return model
 
