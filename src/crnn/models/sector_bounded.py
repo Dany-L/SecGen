@@ -9,7 +9,7 @@ from ..utils import transformation as trans
 from . import base
 
 
-class SectorBoundedLtiRnn(base.ConstrainedModule):
+class SectorBoundedLtiRnn(base.StableConstrainedModule):
     CONFIG = base.ConstrainedModuleConfig
 
     def __init__(self, config: base.ConstrainedModuleConfig) -> None:
@@ -103,7 +103,7 @@ class SectorBoundedLtiRnn(base.ConstrainedModule):
         return problem.status
 
 
-class GeneralSectorBoundedLtiRnn(base.ConstrainedModule):
+class GeneralSectorBoundedLtiRnn(base.StableConstrainedModule):
     CONFIG = base.ConstrainedModuleConfig
 
     def __init__(self, config: base.ConstrainedModuleConfig) -> None:

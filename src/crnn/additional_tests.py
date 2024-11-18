@@ -11,6 +11,7 @@ from .models.base import DynamicIdentificationModel
 from .models.recurrent import BasicLstm, BasicRnn
 from .tracker import events as ev
 from .tracker.base import AggregatedTracker
+from .utils.plot import plot_sequence
 
 
 class AdditionalTestConfig(BaseModel):
@@ -64,7 +65,7 @@ class StabilityOfInitialState(AdditionalTest):
             for x0_i in x0:
                 x0_i.requires_grad = True
             opt = torch.optim.Adam(x0, lr=self.lr, maximize=True)
-
+        e_hats = []
         for epoch in range(self.epochs):
             e_hat, x = self.model.forward(d, x0)
             xk = get_xk(self.model, x)
@@ -86,6 +87,7 @@ class StabilityOfInitialState(AdditionalTest):
                     "", {"eval.xk_norm": float(xk_norm.cpu().detach().numpy())}, epoch
                 )
             )
+            e_hats.append(e_hat[0, :, :].cpu().detach().numpy())
 
             if xk_norm > xk_norm_max:
                 xk_norm_max, x0_max, e_hat_max = (
@@ -103,7 +105,7 @@ class StabilityOfInitialState(AdditionalTest):
                     x0=np.hstack([x0_i.cpu().detach().numpy() for x0_i in x0_max]),
                 )
             ],
-            {},
+            {"e_hats": e_hats},
         )
 
 

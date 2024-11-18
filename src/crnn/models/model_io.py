@@ -15,7 +15,7 @@ def get_model_from_config(
 
     if isinstance(model_class, BasicLstm):
         # to approximately match size of other models, two hidden states h and c
-        model_config.parameters.nz = int(model_config.parameters.nz/2)
+        model_config.parameters.nz = int(model_config.parameters.nz / 2)
 
     init_params = model_config.parameters.model_copy()
     init_params.nd = init_params.nd + init_params.ne

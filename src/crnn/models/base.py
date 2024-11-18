@@ -140,46 +140,6 @@ class ConstrainedModule(DynamicIdentificationModel):
         else:
             raise NotImplementedError(f"Unsupported multiplier: {config.multiplier}")
 
-        mean = 0.0
-        self.A_tilde = torch.nn.Parameter(torch.zeros((self.nx, self.nx)))
-        self.B = torch.nn.Parameter(
-            torch.normal(
-                mean * torch.ones((self.nx, self.nd)),
-                1 / self.nx * torch.ones((self.nx, self.nd)),
-            )
-        )
-        self.B2_tilde = torch.nn.Parameter(torch.zeros((self.nx, self.nw)))
-
-        self.C = torch.nn.Parameter(
-            torch.normal(
-                mean * torch.ones((self.ne, self.nx)),
-                1 / self.ne * torch.ones((self.ne, self.nx)),
-            )
-        )
-        self.D = torch.nn.Parameter(
-            torch.normal(
-                mean * torch.ones((self.ne, self.nd)),
-                1 / self.ne * torch.ones((self.ne, self.nd)),
-            )
-        )
-        self.D12 = torch.nn.Parameter(
-            torch.normal(
-                mean * torch.ones((self.ne, self.nw)),
-                1 / self.ne * torch.ones((self.ne, self.nw)),
-            )
-        )
-
-        self.C2_tilde = torch.nn.Parameter(torch.zeros((self.nz, self.nx)))
-        self.D21 = torch.nn.Parameter(
-            torch.normal(
-                mean * torch.ones((self.nz, self.nd)),
-                1 / self.nz * torch.ones((self.nz, self.nd)),
-            )
-        )
-        self.D22 = torch.zeros((self.nz, self.nw))
-
-        self.X = torch.nn.Parameter(torch.zeros((self.nx, self.nx)))
-
     def get_optimization_multiplier_and_constraints(
         self,
     ) -> Tuple[Union[NDArray[np.float64], cp.Variable], List[cp.Constraint]]:
@@ -209,21 +169,6 @@ class ConstrainedModule(DynamicIdentificationModel):
             self.L.value = torch.diag(L)
         else:
             raise NotImplementedError(f"Unsupported multiplier: {self.multiplier}")
-
-    def set_lure_system(self) -> LureSystemClass:
-        X_inv = torch.linalg.inv(self.X)
-        A = X_inv @ self.A_tilde
-        B2 = X_inv @ self.B2_tilde
-
-        C2 = torch.linalg.inv(self.get_L()) @ self.C2_tilde
-
-        theta = trans.torch_bmat(
-            [[A, self.B, B2], [self.C, self.D, self.D12], [C2, self.D21, self.D22]]
-        )
-        sys = get_lure_matrices(theta, self.nx, self.nd, self.ne, self.nl)
-        self.lure = LureSystem(sys)
-
-        return sys
 
     def add_semidefinite_constraints(self, constraints=List[Callable]) -> None:
         pass
@@ -266,6 +211,140 @@ class ConstrainedModule(DynamicIdentificationModel):
                 if scalar() < 0:
                     return False
         return True
+
+
+class StableConstrainedModule(ConstrainedModule):
+    def __init__(self, config: ConstrainedModuleConfig) -> None:
+        super().__init__(config)
+        mean = 0.0
+        self.A_tilde = torch.nn.Parameter(torch.zeros((self.nx, self.nx)))
+        self.B = torch.nn.Parameter(
+            torch.normal(
+                mean * torch.ones((self.nx, self.nd)),
+                1 / self.nx * torch.ones((self.nx, self.nd)),
+            )
+        )
+        self.B2_tilde = torch.nn.Parameter(torch.zeros((self.nx, self.nw)))
+
+        self.C = torch.nn.Parameter(
+            torch.normal(
+                mean * torch.ones((self.ne, self.nx)),
+                1 / self.ne * torch.ones((self.ne, self.nx)),
+            )
+        )
+        self.D = torch.nn.Parameter(
+            torch.normal(
+                mean * torch.ones((self.ne, self.nd)),
+                1 / self.ne * torch.ones((self.ne, self.nd)),
+            )
+        )
+        self.D12 = torch.nn.Parameter(
+            torch.normal(
+                mean * torch.ones((self.ne, self.nw)),
+                1 / self.ne * torch.ones((self.ne, self.nw)),
+            )
+        )
+
+        self.C2_tilde = torch.nn.Parameter(torch.zeros((self.nz, self.nx)))
+        self.D21 = torch.nn.Parameter(
+            torch.normal(
+                mean * torch.ones((self.nz, self.nd)),
+                1 / self.nz * torch.ones((self.nz, self.nd)),
+            )
+        )
+        self.D22 = torch.zeros((self.nz, self.nw))
+
+        self.X = torch.nn.Parameter(torch.zeros((self.nx, self.nx)))
+
+    def set_lure_system(self) -> LureSystemClass:
+        X_inv = torch.linalg.inv(self.X)
+        A = X_inv @ self.A_tilde
+        B2 = X_inv @ self.B2_tilde
+
+        C2 = torch.linalg.inv(self.get_L()) @ self.C2_tilde
+
+        theta = trans.torch_bmat(
+            [[A, self.B, B2], [self.C, self.D, self.D12], [C2, self.D21, self.D22]]
+        )
+        sys = get_lure_matrices(theta, self.nx, self.nd, self.ne, self.nl)
+        self.lure = LureSystem(sys)
+
+        return sys
+
+
+class IoConstrainedModule(ConstrainedModule):
+    def __init__(self, config: ConstrainedModuleConfig) -> None:
+        super().__init__(config)
+        mean = 0.0
+        self.A = torch.nn.Parameter(
+            torch.normal(
+                mean * torch.ones((self.nx, self.nx)),
+                1 / self.nx * torch.ones((self.nx, self.nx)),
+            )
+        )
+        self.B = torch.nn.Parameter(
+            torch.normal(
+                mean * torch.ones((self.nx, self.nd)),
+                1 / self.nx * torch.ones((self.nx, self.nd)),
+            )
+        )
+        self.B2 = torch.nn.Parameter(
+            torch.normal(
+                mean * torch.ones((self.nx, self.nw)),
+                1 / self.nx * torch.ones((self.nx, self.nw)),
+            )
+        )
+
+        self.C = torch.nn.Parameter(
+            torch.normal(
+                mean * torch.ones((self.ne, self.nx)),
+                1 / self.ne * torch.ones((self.ne, self.nx)),
+            )
+        )
+        self.D = torch.nn.Parameter(
+            torch.normal(
+                mean * torch.ones((self.ne, self.nd)),
+                1 / self.ne * torch.ones((self.ne, self.nd)),
+            )
+        )
+        self.D12 = torch.nn.Parameter(
+            torch.normal(
+                mean * torch.ones((self.ne, self.nw)),
+                1 / self.ne * torch.ones((self.ne, self.nw)),
+            )
+        )
+
+        self.C2 = torch.nn.Parameter(
+            torch.normal(
+                mean * torch.ones((self.nz, self.nx)),
+                1 / self.ne * torch.ones((self.nz, self.nx)),
+            )
+        )
+        self.D21_tilde = torch.nn.Parameter(
+            torch.normal(
+                mean * torch.ones((self.nz, self.nd)),
+                1 / self.nz * torch.ones((self.nz, self.nd)),
+            )
+        )
+        self.D22 = torch.zeros((self.nz, self.nw))
+
+        self.ga2 = torch.nn.Parameter(torch.ones((1, 1)))
+
+    def set_lure_system(self) -> LureSystemClass:
+
+        D21 = torch.linalg.inv(self.get_L()) @ self.D21_tilde
+
+        theta = trans.torch_bmat(
+            [
+                [self.A, self.B, self.B2],
+                [self.C, self.D, self.D12],
+                [self.C2, D21, self.D22],
+            ]
+        )
+        sys = get_lure_matrices(theta, self.nx, self.nd, self.ne, self.nl)
+        self.lure = LureSystem(sys)
+
+        return sys
 
 
 class Linear(nn.Module):
@@ -346,7 +425,7 @@ class LureSystem(Linear):
 
 
 def load_model(model: ConstrainedModule, model_file_name: str) -> ConstrainedModule:
-    model.load_state_dict(torch.load(model_file_name, weights_only=True))
+    model.load_state_dict(torch.load(model_file_name, map_location=torch.device("cpu")))
     model.set_lure_system()
     return model
 

@@ -1,9 +1,9 @@
 import os
+import time
 from typing import Any, Dict, Literal, Tuple
 
 import numpy as np
 import torch
-import time
 
 from . import metrics
 from .additional_tests import (AdditionalTest, AdditionalTestResult,
@@ -99,7 +99,7 @@ def evaluate(
         additional_tests[name] = additional_test_class(
             additional_test_config.parameters, predictor, tracker
         )
-    
+
     start_time = time.time()
     evaluate_model(
         (initializer, predictor),
@@ -154,7 +154,6 @@ def evaluate_model(
         InputOutput(d=d, e_hat=e_hat, e=e) for d, e_hat, e in zip(ds, e_hats, es)
     ]
 
-    
     results: Dict[str, Any] = dict()
     metrics_result: Dict[str, float] = dict()
     for name, metric in metrics.items():
@@ -181,10 +180,16 @@ def evaluate_model(
                 f"{name}-{dataset_name}",
             )
         )
-        additional_test_results[name] = dict(
-            value=result.value,
-            additional=result.additional,
-        )
+        # tracker.track(
+        #     ev.SaveFig(
+        #         "",
+        #         plot.plot_sequence(
+        #             result.additional['e_hats'], 0.01, name
+        #         ),
+        #         f"e-hats-{name}-{dataset_name}",
+        #     )
+        # )
+        additional_test_results[name] = dict(value=result.value)
         tracker.track(
             ev.SaveSequences(
                 "",

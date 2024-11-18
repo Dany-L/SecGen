@@ -19,14 +19,14 @@ def plot_sequence(
     if legend is None:
         legend = ["unknown" for n in range(n)]
     fig, axs = plt.subplots(nrows=1, ncols=n, tight_layout=True, squeeze=False)
-    for state_idx, ax in enumerate(axs.reshape(-1)):
-        for seq, label in zip(sequence, legend):
+    for state_idx, (ax, label) in enumerate(zip(axs.reshape(-1), legend)):
+        for seq in sequence:
             ax.plot(t, seq[:, state_idx], label=label)
         ax.set_xlabel(f"time, dt = {dt:.2f}")
         if title is not None:
             ax.set_title(f"{title} state {state_idx}")
         ax.grid()
-        ax.legend()
+        # ax.legend()
     return fig
 
 

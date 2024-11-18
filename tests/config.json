@@ -95,6 +95,14 @@
             }
         },
         {
+            "m_short_name" : "l2-tanh",
+            "m_class": "crnn.models.l2.L2Stable",
+            "parameters": {
+                "nonlinearity": "tanh",
+                "multiplier": "diag"
+            }
+        },
+        {
             "m_short_name" : "dzn",
             "m_class": "crnn.models.sector_bounded.SectorBoundedLtiRnn",
             "parameters": {
