@@ -75,14 +75,14 @@
             "m_class": "crnn.models.recurrent.BasicLstm",
             "parameters": {
                 "dropout": 0.25,
-                "num_layers": 5
+                "num_layers": 2
             }
         },
         {
             "m_short_name" : "rnn",
             "m_class": "crnn.models.recurrent.BasicRnn",
             "parameters": {
-                "num_layers": 5,
+                "num_layers": 2,
                 "nonlinearity": "tanh"
             }
         },
@@ -95,11 +95,11 @@
             }
         },
         {
-            "m_short_name" : "sat",
+            "m_short_name" : "dzn",
             "m_class": "crnn.models.sector_bounded.SectorBoundedLtiRnn",
             "parameters": {
-                "nonlinearity": "sat",
-                "multiplier": "diag"
+                "nonlinearity": "deadzone",
+                "multiplier": "none"
             }
         },
         {

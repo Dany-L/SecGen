@@ -20,6 +20,7 @@ from .tracker.base import AggregatedTracker, get_trackers_from_config
 from .utils import base as utils
 from .utils import plot
 
+PLOT_AFTER_EPOCHS:int = 100
 
 def train(
     config_file_name: str,
@@ -190,7 +191,7 @@ def train_joint(
             predictor.set_lure_system()
             initializer.set_lure_system()
             loss += batch_loss.item()
-        if epoch % 50 == 0:
+        if epoch % PLOT_AFTER_EPOCHS == 0:
             fig = plot.plot_sequence(
                 [
                     e_hat[0, :].cpu().detach().numpy(),
@@ -237,7 +238,7 @@ def train_zero(
             opt_pred.step()
             predictor.set_lure_system()
             loss += batch_loss.item()
-        if epoch % 50 == 0:
+        if epoch % PLOT_AFTER_EPOCHS == 0:
             fig = plot.plot_sequence(
                 [
                     e_hat[0, :].cpu().detach().numpy(),
@@ -310,7 +311,7 @@ def train_separate(
             predictor.set_lure_system()
             loss += batch_loss.item()
 
-        if epoch % 50 == 0:
+        if epoch % PLOT_AFTER_EPOCHS == 0:
             fig = plot.plot_sequence(
                 [
                     e_hat[0, :].cpu().cpu().detach().numpy(),
