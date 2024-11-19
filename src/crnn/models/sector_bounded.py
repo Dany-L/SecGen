@@ -220,3 +220,76 @@ class GeneralSectorBoundedLtiRnn(base.ConstrainedModule):
         self.set_L(torch.tensor(utils.get_opt_values(L)))
 
         return problem.status
+
+
+class BasicLtiRnn(base.ConstrainedModule):
+    CONFIG = base.ConstrainedModuleConfig
+
+    def __init__(self, config: base.ConstrainedModuleConfig) -> None:
+        super().__init__(config)
+        self.nonlinearity = config.nonlinearity
+
+        mean = 0.0        
+        self.A = torch.zeros((self.nx, self.nx))
+        self.B = torch.zeros((self.nx, self.nd))
+        self.B2 = torch.eye(self.nx)
+
+        self.C = torch.zeros((self.ne, self.nx))
+        self.D = torch.zeros((self.ne, self.nd))
+
+        self.D12 = torch.nn.Parameter(
+            torch.normal(
+                mean * torch.ones((self.ne, self.nw)),
+                1 / self.ne * torch.ones((self.ne, self.nw)),
+            )
+        )
+        self.C2 = torch.nn.Parameter(
+            torch.normal(
+                mean * torch.ones((self.nz, self.nd)),
+                1 / self.nz * torch.ones((self.nz, self.nd)),
+            )
+        )
+        self.D21 = torch.nn.Parameter(
+            torch.normal(
+                mean * torch.ones((self.nz, self.nd)),
+                1 / self.nz * torch.ones((self.nz, self.nd)),
+            )
+        )
+        self.D22 = torch.zeros((self.nz, self.nw))
+
+        self.num_layers = config.num_layers
+        self.lstm_layer = torch.nn.LSTM(
+            input_size=config.nd,
+            hidden_size=config.nz,
+            num_layers=config.num_layers,
+            batch_first=True,
+            dropout=config.dropout,
+        )
+        self.output_layer = torch.nn.Linear(in_features=self.nz, out_features=self.ne)
+        # self.tracker = tracker
+        for name, param in self.lstm_layer.named_parameters():
+            if "weight" in name:
+                torch.nn.init.xavier_normal_(param)
+
+        torch.nn.init.xavier_normal_(self.output_layer.weight)
+
+    def set_lure_system(self) -> base.LureSystemClass:
+        theta = trans.torch_bmat(
+            [[self.A, self.B, self.B2], [self.C, self.D, self.D12], [self.C2, self.D21, self.D22]]
+        )
+        sys = base.get_lure_matrices(theta, self.nx, self.nd, self.ne, self.nl)
+        self.lure = base.LureSystem(sys)
+
+        return sys
+
+    def add_semidefinite_constraints(self, constraints=List[Callable]) -> None:
+        pass
+
+    def add_pointwise_constraints(self, constraints=List[Callable]) -> None:
+        pass
+
+    def initialize_parameters(self) -> None:
+        pass
+
+    def project_parameters(self) -> None:
+        pass

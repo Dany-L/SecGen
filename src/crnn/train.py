@@ -227,17 +227,28 @@ def train_zero(
     predictor.initialize_parameters()
     predictor.set_lure_system()
     predictor.train()
+    t, increase_rate, increase_after_epochs = 1.0, 10.0, 100
 
     for epoch in range(epochs):
-        loss = 0
+        loss, phi = 0.0, 0.0 # phi is barrier
         for step, batch in enumerate(train_loader):
             predictor.zero_grad()
             e_hat, _ = predictor.forward(batch["d"])
             batch_loss = loss_function(e_hat, batch["e"])
-            batch_loss.backward()
+            batch_loss.backward(retain_graph=True)
+            dL = [p.grad.detach().clone() for p in predictor.parameters() if p.grad is not None]
+            # predictor.zero_grad()
+
+            # batch_phi = 1/t*torch.sum(*[-torch.logdet(-M()) for M in predictor.sdp_constraints()])
+            # batch_phi.backward(retain_graph=True)
+            # dPhis = [p.grad.detach().clone() for p in predictor.parameters() if p.grad is not None]
+
+
+            # (batch_loss+batch_phi).backward()
             opt_pred.step()
             predictor.set_lure_system()
             loss += batch_loss.item()
+            # phi += batch_phi.item()
         if epoch % PLOT_AFTER_EPOCHS == 0:
             fig = plot.plot_sequence(
                 [
@@ -250,12 +261,18 @@ def train_zero(
             )
             tracker.track(ev.SaveFig("", fig, f"e_{epoch}"))
 
-        if not predictor.check_constraints():
-            problem_status = predictor.project_parameters()
-            tracker.track(ev.Log("", f"Projecting parameters: {problem_status}"))
-            predictor.set_lure_system()
-        tracker.track(ev.Log("", f"{epoch}/{epochs}\t l= {loss:.2f}"))
-        tracker.track(ev.TrackMetrics("", {"epoch.loss.predictor": float(loss)}, epoch))
+        tracker.track(ev.Log("", f"{epoch}/{epochs}\t l= {loss:.2f} \t phi= {phi:.2f}"))
+        tracker.track(ev.TrackMetrics("", {"epoch.loss.predictor": float(loss), "epoch.phi.predictor":float(phi)}, epoch))
+
+        if (epoch+1) % increase_after_epochs == 0:
+            t = t*increase_rate
+            tracker.track(ev.Log("", f"Increase t by {increase_rate} to {t}"))
+        # if not predictor.check_constraints():
+        #     problem_status = predictor.project_parameters()
+        #     tracker.track(ev.Log("", f"Projecting parameters: {problem_status}"))
+        #     predictor.set_lure_system()
+
+
 
     return (None, predictor)
 
