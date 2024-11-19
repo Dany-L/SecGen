@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import torch
 from numpy.typing import NDArray
-from scipy.io import savemat
+from scipy.io import loadmat, savemat
 
 from .configuration.base import (DATASET_DIR_ENV_VAR, InputOutput,
                                  Normalization, NormalizationParameters)
@@ -107,7 +107,7 @@ def save_model_parameter(model: ConstrainedModule, file_name: str) -> None:
     savemat(file_name, par_dict)
 
 
-def save_sequences_to_mat(sequences: List[InputOutput], file_name) -> None:
+def save_input_output_to_mat(sequences: List[InputOutput], file_name) -> None:
     e_hats = [s.e_hat for s in sequences]
     es = [s.e for s in sequences]
     ds = [s.d for s in sequences]
@@ -121,6 +121,20 @@ def save_sequences_to_mat(sequences: List[InputOutput], file_name) -> None:
             "x0": np.array(x0s),
         },
     )
+
+
+def load_input_output_from_mat(filename: str) -> List[InputOutput]:
+    input_output_data = loadmat(filename)
+    N = input_output_data["e_hat"].shape[0]
+    names = InputOutput.__annotations__.keys()
+    ios = []
+    for N_idx in range(N):
+        io = {}
+        for name in names:
+            # if len(input_output_data[name].shape) > 2:
+            io[name] = input_output_data[name][N_idx]
+        ios.append(InputOutput(**io))
+    return ios
 
 
 def write_dict_to_json(config: Dict[str, Any], file_name: str) -> None:

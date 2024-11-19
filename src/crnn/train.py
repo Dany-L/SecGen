@@ -20,7 +20,8 @@ from .tracker.base import AggregatedTracker, get_trackers_from_config
 from .utils import base as utils
 from .utils import plot
 
-PLOT_AFTER_EPOCHS:int = 100
+PLOT_AFTER_EPOCHS: int = 100
+
 
 def train(
     config_file_name: str,
