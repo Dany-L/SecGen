@@ -429,7 +429,9 @@ class LureSystem(Linear):
 
 
 def load_model(model: ConstrainedModule, model_file_name: str) -> ConstrainedModule:
-    model.load_state_dict(torch.load(model_file_name, map_location=torch.device("cpu")))
+    model.load_state_dict(
+        torch.load(model_file_name, map_location=torch.device("cpu"), weights_only=True)
+    )
     model.set_lure_system()
     return model
 

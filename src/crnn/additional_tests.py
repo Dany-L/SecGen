@@ -82,11 +82,6 @@ class StabilityOfInitialState(AdditionalTest):
                     f"{epoch}/{self.epochs}: xk norm: {xk_norm.cpu().detach().numpy():.2f}",
                 )
             )
-            self.tracker.track(
-                ev.TrackMetrics(
-                    "", {"eval.xk_norm": float(xk_norm.cpu().detach().numpy())}, epoch
-                )
-            )
             e_hats.append(e_hat[0, :, :].cpu().detach().numpy())
 
             if xk_norm > xk_norm_max:
@@ -132,11 +127,6 @@ class InputOutputStabilityL2(AdditionalTest):
                 ev.Log(
                     "",
                     f"{epoch}/{self.epochs}: ga: {np.sqrt(ga_2.cpu().detach().numpy()):.2f}",
-                )
-            )
-            self.tracker.track(
-                ev.TrackMetrics(
-                    "", {"eval.ga": float(np.sqrt(ga_2.cpu().detach().numpy()))}, epoch
                 )
             )
         return AdditionalTestResult(

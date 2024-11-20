@@ -197,6 +197,7 @@ def evaluate_model(
                 f"test_output-{name}-{dataset_name}",
             )
         )
+        tracker.track(ev.TrackMetrics("", {name: result.value}))
     results["additional_tests"] = additional_test_results
 
     tracker.track(ev.SaveSequences("", input_outputs, f"test_output-{dataset_name}"))

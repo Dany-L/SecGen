@@ -1,11 +1,11 @@
 import os
 import time
-from typing import Optional, Tuple
+from typing import List, Optional, Tuple
 
 import numpy as np
 import torch
 from torch import nn
-from torch.optim import Optimizer
+from torch.optim import Optimizer, lr_scheduler
 from torch.utils.data import DataLoader
 
 from .configuration.experiment import load_configuration
@@ -96,6 +96,10 @@ def train(
         optimizers = get_optimizer(
             experiment_config, (initializer.parameters(), predictor.parameters())
         )
+        schedulers = [
+            lr_scheduler.ReduceLROnPlateau(optimizer, "min", patience=50)
+            for optimizer in optimizers
+        ]
         loss_fcn = get_loss_function(experiment_config.loss_function)
 
         if experiment_config.initial_hidden_state == "zero":
@@ -105,6 +109,7 @@ def train(
                 epochs=experiment_config.epochs,
                 optimizers=optimizers,
                 loss_function=loss_fcn,
+                schedulers=schedulers,
                 tracker=tracker,
             )
         elif experiment_config.initial_hidden_state == "joint":
@@ -114,6 +119,7 @@ def train(
                 epochs=experiment_config.epochs,
                 optimizers=optimizers,
                 loss_function=loss_fcn,
+                schedulers=schedulers,
                 tracker=tracker,
             )
         elif experiment_config.initial_hidden_state == "separate":
@@ -123,6 +129,7 @@ def train(
                 epochs=experiment_config.epochs,
                 optimizers=optimizers,
                 loss_function=loss_fcn,
+                schedulers=schedulers,
                 tracker=tracker,
             )
         else:
@@ -161,13 +168,15 @@ def train_joint(
     models: Tuple[base.ConstrainedModule],
     loaders: Tuple[DataLoader],
     epochs: int,
-    optimizers: Tuple[Optimizer],
+    optimizers: List[Optimizer],
     loss_function: nn.Module,
+    schedulers: List[lr_scheduler.ReduceLROnPlateau],
     tracker: AggregatedTracker = AggregatedTracker(),
 ) -> Tuple[Optional[base.ConstrainedModule]]:
     _, train_loader = loaders
     initializer, predictor = models
-    opt_init, opt_pred = optimizers
+    (opt_pred,) = optimizers
+    (sch_pred,) = schedulers
     initializer.initialize_parameters()
     initializer.set_lure_system()
     problem_status = predictor.initialize_parameters()
@@ -177,7 +186,7 @@ def train_joint(
     t, increase_rate, increase_after_epochs = 1.0, 10.0, 100
 
     for epoch in range(epochs):
-        loss, phi = 0.0, 0.0 # phi is barrier
+        loss, phi = 0.0, 0.0  # phi is barrier
         for step, batch in enumerate(train_loader):
             predictor.zero_grad()
             initializer.zero_grad()
@@ -189,7 +198,7 @@ def train_joint(
                 e_hat_init[:, -1, :], batch["e_init"][:, -1, :]
             )
             batch_loss = batch_loss_predictor + batch_loss_initializer
-            (batch_loss+batch_phi).backward()
+            (batch_loss + batch_phi).backward()
             opt_pred.step()
             predictor.set_lure_system()
             initializer.set_lure_system()
@@ -211,12 +220,29 @@ def train_joint(
             problem_status = predictor.project_parameters()
             tracker.track(ev.Log("", f"Projecting parameters: {problem_status}"))
             predictor.set_lure_system()
-        tracker.track(ev.Log("", f"{epoch}/{epochs}\t l= {loss:.2f} \t phi= {phi:.2f}"))
-        tracker.track(ev.TrackMetrics("", {"epoch.loss.predictor": float(loss), "epoch.phi.predictor":float(phi)}, epoch))
 
-        if (epoch+1) % increase_after_epochs == 0:
-            t = t*increase_rate
-            tracker.track(ev.Log("", f"Increase t by {increase_rate} to {t}"))
+        tracker.track(ev.Log("", f"{epoch}/{epochs}\t l= {loss:.2f} \t phi= {phi:.2f}"))
+        tracker.track(
+            ev.TrackMetrics(
+                "",
+                {
+                    "epoch.loss.predictor": float(loss),
+                    "epoch.phi.predictor": float(phi),
+                },
+                epoch,
+            )
+        )
+
+        sch_pred.step(loss)
+
+        if (epoch + 1) % increase_after_epochs == 0:
+            t = t * increase_rate
+            tracker.track(
+                ev.Log(
+                    "",
+                    f"Increase t by {increase_rate} to {t}, lr: {sch_pred.get_last_lr()}",
+                )
+            )
 
     return (initializer, predictor)
 
@@ -225,26 +251,28 @@ def train_zero(
     models: Tuple[base.ConstrainedModule],
     loaders: Tuple[DataLoader],
     epochs: int,
-    optimizers: Tuple[Optimizer],
+    optimizers: List[Optimizer],
+    schedulers: List[lr_scheduler.ReduceLROnPlateau],
     loss_function: nn.Module,
     tracker: AggregatedTracker = AggregatedTracker(),
 ) -> Tuple[Optional[base.ConstrainedModule]]:
     _, train_loader = loaders
     _, predictor = models
     _, opt_pred = optimizers
+    _, sch_pred = schedulers
     predictor.initialize_parameters()
     predictor.set_lure_system()
     predictor.train()
     t, increase_rate, increase_after_epochs = 1.0, 10.0, 100
 
     for epoch in range(epochs):
-        loss, phi = 0.0, 0.0 # phi is barrier
+        loss, phi = 0.0, 0.0  # phi is barrier
         for step, batch in enumerate(train_loader):
             predictor.zero_grad()
             e_hat, _ = predictor.forward(batch["d"])
             batch_loss = loss_function(e_hat, batch["e"])
             batch_phi = get_barrier(predictor, t)
-            (batch_loss+batch_phi).backward()
+            (batch_loss + batch_phi).backward()
             opt_pred.step()
             predictor.set_lure_system()
             loss += batch_loss.item()
@@ -266,14 +294,22 @@ def train_zero(
             predictor.set_lure_system()
 
         tracker.track(ev.Log("", f"{epoch}/{epochs}\t l= {loss:.2f} \t phi= {phi:.2f}"))
-        tracker.track(ev.TrackMetrics("", {"epoch.loss.predictor": float(loss), "epoch.phi.predictor":float(phi)}, epoch))
+        tracker.track(
+            ev.TrackMetrics(
+                "",
+                {
+                    "epoch.loss.predictor": float(loss),
+                    "epoch.phi.predictor": float(phi),
+                },
+                epoch,
+            )
+        )
 
-        if (epoch+1) % increase_after_epochs == 0:
-            t = t*increase_rate
+        sch_pred.step(loss)
+
+        if (epoch + 1) % increase_after_epochs == 0:
+            t = t * increase_rate
             tracker.track(ev.Log("", f"Increase t by {increase_rate} to {t}"))
-
-
-
 
     return (None, predictor)
 
@@ -282,13 +318,15 @@ def train_separate(
     models: Tuple[base.ConstrainedModule],
     loaders: Tuple[DataLoader],
     epochs: int,
-    optimizers: Tuple[Optimizer],
+    optimizers: List[Optimizer],
+    schedulers: List[lr_scheduler.ReduceLROnPlateau],
     loss_function: nn.Module,
     tracker: AggregatedTracker = AggregatedTracker(),
 ) -> Tuple[Optional[base.ConstrainedModule]]:
     init_loader, pred_loader = loaders
     initializer, predictor = models
     opt_init, opt_pred = optimizers
+    sch_init, sch_pred = schedulers
     initializer.initialize_parameters()
     initializer.set_lure_system()
     initializer.train()
@@ -315,9 +353,11 @@ def train_separate(
             ev.TrackMetrics("", {"epoch.loss.initializer": float(loss)}, epoch)
         )
 
+        sch_init.step(loss)
+
     # predictor
     for epoch in range(epochs):
-        loss, phi = 0.0, 0.0 # phi is barrier
+        loss, phi = 0.0, 0.0  # phi is barrier
         for step, batch in enumerate(pred_loader):
             predictor.zero_grad()
             initializer.zero_grad()
@@ -326,7 +366,7 @@ def train_separate(
             e_hat, _ = predictor.forward(batch["d"], h0)
             batch_loss = loss_function(e_hat, batch["e"])
             batch_phi = get_barrier(predictor, t)
-            (batch_loss+batch_phi).backward()
+            (batch_loss + batch_phi).backward()
             opt_pred.step()
             predictor.set_lure_system()
             loss += batch_loss.item()
@@ -350,18 +390,35 @@ def train_separate(
             predictor.set_lure_system()
 
         tracker.track(ev.Log("", f"{epoch}/{epochs}\t l= {loss:.2f} \t phi= {phi:.2f}"))
-        tracker.track(ev.TrackMetrics("", {"epoch.loss.predictor": float(loss), "epoch.phi.predictor":float(phi)}, epoch))
+        tracker.track(
+            ev.TrackMetrics(
+                "",
+                {
+                    "epoch.loss.predictor": float(loss),
+                    "epoch.phi.predictor": float(phi),
+                },
+                epoch,
+            )
+        )
 
-        if (epoch+1) % increase_after_epochs == 0:
-            t = t*increase_rate
+        sch_pred.step(loss)
+
+        if (epoch + 1) % increase_after_epochs == 0:
+            t = t * increase_rate
             tracker.track(ev.Log("", f"Increase t by {increase_rate} to {t}"))
-
 
     return (initializer, predictor)
 
-def get_barrier(predictor: base.DynamicIdentificationModel, t:float)-> torch.Tensor:
+
+def get_barrier(predictor: base.DynamicIdentificationModel, t: float) -> torch.Tensor:
     if predictor.sdp_constraints() is not None:
-        batch_phi = 1/t*torch.sum(torch.tensor([-torch.logdet(-M()) for M in predictor.sdp_constraints()]))
+        batch_phi = (
+            1
+            / t
+            * torch.sum(
+                torch.tensor([-torch.logdet(-M()) for M in predictor.sdp_constraints()])
+            )
+        )
     else:
         batch_phi = torch.tensor(0.0)
     return batch_phi

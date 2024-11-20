@@ -229,7 +229,7 @@ class BasicLtiRnn(base.ConstrainedModule):
         super().__init__(config)
         self.nonlinearity = config.nonlinearity
 
-        mean = 0.0        
+        mean = 0.0
         self.A = torch.zeros((self.nx, self.nx))
         self.B = torch.zeros((self.nx, self.nd))
         self.B2 = torch.eye(self.nw)
@@ -259,13 +259,17 @@ class BasicLtiRnn(base.ConstrainedModule):
 
     def set_lure_system(self) -> base.LureSystemClass:
         theta = trans.torch_bmat(
-            [[self.A, self.B, self.B2], [self.C, self.D, self.D12], [self.C2, self.D21, self.D22]]
+            [
+                [self.A, self.B, self.B2],
+                [self.C, self.D, self.D12],
+                [self.C2, self.D21, self.D22],
+            ]
         )
         sys = base.get_lure_matrices(theta, self.nx, self.nd, self.ne, self.nl)
         self.lure = base.LureSystem(sys)
 
         return sys
-    
+
     def check_constraints(self) -> bool:
         return True
 
