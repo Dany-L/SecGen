@@ -75,6 +75,10 @@ class DynamicIdentificationModel(nn.Module, ABC):
     def initialize_parameters(self) -> str:
         pass
 
+    @abstractmethod
+    def sdp_constraints(self) -> List[Callable]:
+        pass
+
     def set_lure_system(self) -> LureSystemClass:
         return LureSystem(
             get_lure_matrices(

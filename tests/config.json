@@ -71,6 +71,13 @@
     },
     "models": [
         {
+            "m_short_name": "ltiRnn",
+            "m_class": "crnn.models.sector_bounded.BasicLtiRnn",
+            "parameters": {
+                "nonlinearity": "tanh"
+            }
+        },
+        {
             "m_short_name": "lstm",
             "m_class": "crnn.models.recurrent.BasicLstm",
             "parameters": {

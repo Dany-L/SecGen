@@ -232,7 +232,7 @@ class BasicLtiRnn(base.ConstrainedModule):
         mean = 0.0        
         self.A = torch.zeros((self.nx, self.nx))
         self.B = torch.zeros((self.nx, self.nd))
-        self.B2 = torch.eye(self.nx)
+        self.B2 = torch.eye(self.nw)
 
         self.C = torch.zeros((self.ne, self.nx))
         self.D = torch.zeros((self.ne, self.nd))
@@ -245,8 +245,8 @@ class BasicLtiRnn(base.ConstrainedModule):
         )
         self.C2 = torch.nn.Parameter(
             torch.normal(
-                mean * torch.ones((self.nz, self.nd)),
-                1 / self.nz * torch.ones((self.nz, self.nd)),
+                mean * torch.ones((self.nz, self.nx)),
+                1 / self.nz * torch.ones((self.nz, self.nx)),
             )
         )
         self.D21 = torch.nn.Parameter(
@@ -257,22 +257,6 @@ class BasicLtiRnn(base.ConstrainedModule):
         )
         self.D22 = torch.zeros((self.nz, self.nw))
 
-        self.num_layers = config.num_layers
-        self.lstm_layer = torch.nn.LSTM(
-            input_size=config.nd,
-            hidden_size=config.nz,
-            num_layers=config.num_layers,
-            batch_first=True,
-            dropout=config.dropout,
-        )
-        self.output_layer = torch.nn.Linear(in_features=self.nz, out_features=self.ne)
-        # self.tracker = tracker
-        for name, param in self.lstm_layer.named_parameters():
-            if "weight" in name:
-                torch.nn.init.xavier_normal_(param)
-
-        torch.nn.init.xavier_normal_(self.output_layer.weight)
-
     def set_lure_system(self) -> base.LureSystemClass:
         theta = trans.torch_bmat(
             [[self.A, self.B, self.B2], [self.C, self.D, self.D12], [self.C2, self.D21, self.D22]]
@@ -281,11 +265,11 @@ class BasicLtiRnn(base.ConstrainedModule):
         self.lure = base.LureSystem(sys)
 
         return sys
+    
+    def check_constraints(self) -> bool:
+        return True
 
-    def add_semidefinite_constraints(self, constraints=List[Callable]) -> None:
-        pass
-
-    def add_pointwise_constraints(self, constraints=List[Callable]) -> None:
+    def sdp_constraints(self) -> List[Callable]:
         pass
 
     def initialize_parameters(self) -> None:

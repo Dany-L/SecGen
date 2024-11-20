@@ -63,6 +63,9 @@ class BasicRnn(DynamicIdentificationModel):
     def project_parameters(self) -> None:
         pass
 
+    def sdp_constraints(self) -> List[Callable]:
+        pass
+
 
 class BasicLstmConfig(DynamicIdentificationConfig):
     dropout: float = 0.25
@@ -115,4 +118,7 @@ class BasicLstm(DynamicIdentificationModel):
         pass
 
     def project_parameters(self) -> None:
+        pass
+
+    def sdp_constraints(self) -> List[Callable]:
         pass
