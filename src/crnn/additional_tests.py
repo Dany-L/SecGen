@@ -1,6 +1,6 @@
 from abc import abstractmethod
 from dataclasses import dataclass
-from typing import Dict, List, Literal, Tuple, Type, Union
+from typing import Dict, List, Literal, Tuple, Type, Union, Optional
 
 import numpy as np
 import torch
@@ -19,6 +19,7 @@ class AdditionalTestConfig(BaseModel):
     horizon: int
     sampling_type: Literal["optimize", "random"] = "optimize"
     lr: float = 0.01
+    scale: float = 1.0
 
 
 @dataclass
@@ -44,6 +45,7 @@ class AdditionalTest:
         self.nx, self.ne, self.nd, self.B = model.nx, model.ne, model.nd, 1
         self.sampling_type = config.sampling_type
         self.tracker = tracker
+        self.scale = config.scale
 
     @abstractmethod
     def test(self) -> AdditionalTestResult:
@@ -65,7 +67,6 @@ class StabilityOfInitialState(AdditionalTest):
             for x0_i in x0:
                 x0_i.requires_grad = True
             opt = torch.optim.Adam(x0, lr=self.lr, maximize=True)
-        e_hats = []
         for epoch in range(self.epochs):
             e_hat, x = self.model.forward(d, x0)
             xk = get_xk(self.model, x)
@@ -76,19 +77,19 @@ class StabilityOfInitialState(AdditionalTest):
                 opt.zero_grad()
             elif self.sampling_type == "random":
                 x0 = get_x0(self.model, self.B)
-            self.tracker.track(
-                ev.Log(
-                    "",
-                    f"{epoch}/{self.epochs}: xk norm: {xk_norm.cpu().detach().numpy():.2f}",
-                )
-            )
-            e_hats.append(e_hat[0, :, :].cpu().detach().numpy())
+                
 
             if xk_norm > xk_norm_max:
                 xk_norm_max, x0_max, e_hat_max = (
-                    xk_norm,
-                    x0,
-                    e_hat[0, :, :].cpu().detach().numpy(),
+                    xk_norm.clone().detach(),
+                    [x0_i.clone().detach() for x0_i in x0],
+                    e_hat.clone().detach(),
+                )
+                self.tracker.track(
+                    ev.Log(
+                        "",
+                        f"{epoch}/{self.epochs}: xk norm: {xk_norm.cpu().detach().numpy():.2f}, e_hat norm {torch.linalg.norm(e_hat).cpu().detach().numpy():.2f}",
+                    )
                 )
 
         return AdditionalTestResult(
@@ -96,17 +97,18 @@ class StabilityOfInitialState(AdditionalTest):
             [
                 InputOutput(
                     d=d.cpu().detach().numpy(),
-                    e_hat=e_hat_max,
-                    x0=np.hstack([x0_i.cpu().detach().numpy() for x0_i in x0_max]),
+                    e_hat=e_hat_max.cpu().detach().numpy(),
+                    x0=np.array([x0_i.cpu().detach().numpy() for x0_i in x0_max]),
                 )
             ],
-            {"e_hats": e_hats},
+            {},
         )
 
 
 class InputOutputStabilityL2(AdditionalTest):
-    def test(self) -> AdditionalTestResult:
-        d = torch.randn(self.B, self.horizon, self.nd)
+    def test(self,
+             x0: Optional[Union[Tuple[torch.Tensor], Tuple[torch.Tensor,torch.Tensor]]]=None) -> AdditionalTestResult:
+        d = self.scale * torch.randn(self.B, self.horizon, self.nd)
         d.requires_grad = True
         ga_2_max, e_hat_max, d_max = (
             torch.tensor(0.0),
@@ -116,19 +118,20 @@ class InputOutputStabilityL2(AdditionalTest):
         opt = torch.optim.Adam([d], lr=self.lr, maximize=True)
         for epoch in range(self.epochs):
             opt.zero_grad()
-            e_hat, _ = self.model.forward(d)
+            e_hat, _ = self.model.forward(d, x0)
             ga_2 = self.get_sequence_norm(e_hat) / self.get_sequence_norm(d)
             ga_2.backward(retain_graph=True)
             opt.step()
 
             if ga_2 > ga_2_max:
-                ga_2_max, e_hat_max, d_max = ga_2, e_hat[0, :, :], d[0, :, :]
-            self.tracker.track(
-                ev.Log(
-                    "",
-                    f"{epoch}/{self.epochs}: ga: {np.sqrt(ga_2.cpu().detach().numpy()):.2f}",
+                ga_2_max, e_hat_max, d_max = ga_2.clone().detach(), e_hat.clone().detach(), d.clone().detach()
+                self.tracker.track(
+                    ev.Log(
+                        "",
+                        f"{epoch}/{self.epochs}: ga: {np.sqrt(ga_2.cpu().detach().numpy()):.2f}, norm e_hat: {torch.linalg.norm(e_hat).cpu().detach().numpy():.2f}, norm d: {torch.linalg.norm(d).cpu().detach().numpy():.2f}",
+                    )
                 )
-            )
+
         return AdditionalTestResult(
             np.sqrt(ga_2_max.cpu().detach().numpy()),
             [

@@ -175,20 +175,11 @@ def evaluate_model(
             ev.SaveFig(
                 "",
                 plot.plot_sequence(
-                    [result.input_output[0].e_hat], 0.01, name, ["e_hat"]
+                    [result.input_output[0].e_hat[0]], 0.01, name, ["e_hat"]
                 ),
                 f"{name}-{dataset_name}",
             )
         )
-        # tracker.track(
-        #     ev.SaveFig(
-        #         "",
-        #         plot.plot_sequence(
-        #             result.additional['e_hats'], 0.01, name
-        #         ),
-        #         f"e-hats-{name}-{dataset_name}",
-        #     )
-        # )
         additional_test_results[name] = dict(value=result.value)
         tracker.track(
             ev.SaveSequences(
