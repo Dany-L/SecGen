@@ -77,13 +77,12 @@ class StabilityOfInitialState(AdditionalTest):
                 opt.zero_grad()
             elif self.sampling_type == "random":
                 x0 = get_x0(self.model, self.B)
-                
 
             if xk_norm > xk_norm_max:
                 xk_norm_max, x0_max, e_hat_max = (
-                    xk_norm.clone().detach(),
-                    [x0_i.clone().detach() for x0_i in x0],
-                    e_hat.clone().detach(),
+                    xk_norm.clone(),
+                    [x0_i.clone() for x0_i in x0],
+                    e_hat.clone(),
                 )
                 self.tracker.track(
                     ev.Log(
@@ -106,8 +105,12 @@ class StabilityOfInitialState(AdditionalTest):
 
 
 class InputOutputStabilityL2(AdditionalTest):
-    def test(self,
-             x0: Optional[Union[Tuple[torch.Tensor], Tuple[torch.Tensor,torch.Tensor]]]=None) -> AdditionalTestResult:
+    def test(
+        self,
+        x0: Optional[
+            Union[Tuple[torch.Tensor], Tuple[torch.Tensor, torch.Tensor]]
+        ] = None,
+    ) -> AdditionalTestResult:
         d = self.scale * torch.randn(self.B, self.horizon, self.nd)
         d.requires_grad = True
         ga_2_max, e_hat_max, d_max = (
@@ -124,7 +127,11 @@ class InputOutputStabilityL2(AdditionalTest):
             opt.step()
 
             if ga_2 > ga_2_max:
-                ga_2_max, e_hat_max, d_max = ga_2.clone().detach(), e_hat.clone().detach(), d.clone().detach()
+                ga_2_max, e_hat_max, d_max = (
+                    ga_2.clone().detach(),
+                    e_hat.clone().detach(),
+                    d.clone().detach(),
+                )
                 self.tracker.track(
                     ev.Log(
                         "",

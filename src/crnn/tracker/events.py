@@ -81,6 +81,12 @@ class TrackParameters(Event):
 
 
 @dataclasses.dataclass
+class TrackResults(Event):
+    name: str
+    parameters: Dict[str, Any]
+
+
+@dataclasses.dataclass
 class TrackParameter(Event):
     name: str
     parameter: str

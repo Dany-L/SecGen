@@ -107,6 +107,9 @@ class DynamicIdentificationModel(nn.Module, ABC):
     def check_constraints(self) -> bool:
         return True
 
+    def get_phi(self, t: float) -> torch.Tensor:
+        return torch.tensor(0.0)
+
     @abstractmethod
     def project_parameters(self) -> str:
         pass
@@ -215,6 +218,19 @@ class ConstrainedModule(DynamicIdentificationModel):
                 if scalar() < 0:
                     return False
         return True
+
+    def get_phi(self, t: float) -> torch.Tensor:
+        if self.sdp_constraints() is not None:
+            batch_phi = (
+                1
+                / t
+                * torch.sum(
+                    torch.tensor([-torch.logdet(M()) for M in self.sdp_constraints()])
+                )
+            )
+        else:
+            batch_phi = torch.tensor(0.0)
+        return batch_phi
 
 
 class StableConstrainedModule(ConstrainedModule):
@@ -450,3 +466,46 @@ def retrieve_model_class(model_class_string: str) -> Type[DynamicIdentificationM
     if not issubclass(cls, DynamicIdentificationModel):
         raise ValueError(f"{cls} is not a subclass of DynamicIdentificationModel")
     return cls  # type: ignore
+
+
+class OptFcn:
+    def __init__(
+        self,
+        d: torch.Tensor,
+        e: torch.Tensor,
+        nn: ConstrainedModule,
+        t=float,
+        x0: torch.Tensor = None,
+        l: torch.nn.Module = torch.nn.MSELoss(),
+    ) -> None:
+        self.d = d
+        self.x0 = x0
+        self.e = e
+        self.nn = nn
+        self.l = l
+        self.t = torch.tensor(t)
+
+    def f(self, theta: torch.Tensor) -> torch.Tensor:
+        self.set_vec_pars_to_model(theta)
+        self.nn.set_lure_system()
+        l = self.l(self.nn(self.d, self.x0)[0], self.e)
+        phi = self.nn.get_phi(self.t)
+        return l + phi
+
+    def dF(self, theta: torch.Tensor) -> torch.Tensor:
+        self.nn.zero_grad()
+        loss = self.f(theta)
+        loss.backward(retain_graph=True)
+        grads = []
+        for p in self.nn.parameters():
+            if p.grad is not None:
+                grads.append(p.grad.flatten())
+
+        return torch.hstack(grads).reshape(-1, 1)
+
+    def set_vec_pars_to_model(self, theta: torch.Tensor) -> None:
+        start_flat = 0
+        for p in self.nn.parameters():
+            num_par = p.numel()
+            p.data = theta[start_flat : start_flat + num_par].view(p.shape)
+            start_flat += num_par

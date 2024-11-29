@@ -4,8 +4,12 @@ import time
 from datetime import datetime
 
 from ..configuration.base import FIG_FOLDER_NAME, SEQ_FOLDER_NAME
-from ..data_io import (save_input_output_to_mat, save_model,
-                       save_model_parameter, write_dict_to_json)
+from ..data_io import (
+    save_input_output_to_mat,
+    save_model,
+    save_model_parameter,
+    write_dict_to_json,
+)
 from ..utils import base as utils
 from ..utils import plot
 from . import events as ev
@@ -84,6 +88,15 @@ class IoTracker(BaseTracker):
                 ),
             )
             self.write_to_logfile(f"Save model config json file to {self.directory}")
+        elif isinstance(event, ev.TrackResults):
+            write_dict_to_json(
+                event.parameters,
+                os.path.join(
+                    self.directory,
+                    f"{event.name}.json",
+                ),
+            )
+            self.write_to_logfile(f"Save results json to {self.directory}")
 
     def write_to_logfile(self, msg: str) -> None:
         with open(self.log_file_path, "a") as f:

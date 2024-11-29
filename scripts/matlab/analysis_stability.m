@@ -1,9 +1,10 @@
 clear all, close all,
 %%
-experiment_names = {'P-64-joint','P-64-joint','P-16-joint'};
-model_names = {'dzn','tanh','dznGen'};
+experiment_names = {'MSD-32-joint','MSD-32-joint', 'MSD-32-joint'};
+model_names = {'dzn','dznGen','tanh'};
 % result_directory = '~/cloud_private/results_local/';
-result_directory = '~/cloud_privat/03_Promotion/_transfer';
+result_directory = '/Users/jack/coupled-msd/2024_11_21-cRnn';
+% result_directory = '~/cloud_privat/03_Promotion/_transfer';
 
 % model_names = {'tanh','dzn','dznGen'};
 results = cell(length(model_names));
@@ -14,14 +15,16 @@ for model_idx =1:length(model_names)
 
     e_m_name = sprintf('%s-%s', experiment_name, model_name);
     parameter_file_name = sprintf('model_params-%s.mat', e_m_name);
-    test_file_name = '/Users/jack/actuated_pendulum/data/nonlinear-initial_state-0_M-500_T-10/processed/test/0198_simulation_T_10.csv';
+%     test_file_name = '/Users/jack/actuated_pendulum/data/nonlinear-initial_state-0_M-500_T-10/processed/test/0198_simulation_T_10.csv';
 %     test_file_name = '/Users/jack/actuated_pendulum/data/ood-initial_state_0-s_4_M-100_T-10/processed/test/0058_simulation_T_10.csv';
+    test_file_name = '/Users/jack/coupled-msd/data/coupled-msd-routine/processed/test/0008_simulation_T_1500.csv';
     experiment_config_file_name = sprintf('config-experiment-%s.json', e_m_name);
     model_config_file_name = sprintf('config-model-%s.json', e_m_name);
     model_cfg = jsondecode(fileread(fullfile(result_directory,e_m_name,model_config_file_name)));
     experiment_cfg =jsondecode(fileread(fullfile(result_directory,e_m_name,experiment_config_file_name)));
     normalization = jsondecode(fileread(fullfile(result_directory,e_m_name,'normalization.json')));
     validation_log_file = fullfile(result_directory,e_m_name,'validation.log');
+    evaluation_file_name = fullfile(result_directory, e_m_name, 'test-eval.json');
 
     h = experiment_cfg.horizons.testing;dt = experiment_cfg.dt; w=experiment_cfg.window;
     tab = readtable(test_file_name);
@@ -129,9 +132,7 @@ for model_idx =1:length(model_names)
 %     end
     %% find an upper bound on the l2 gain
     eps=1e-5;
-
-
-    
+    ga2s = [];
     L1 = [eye(nx),zeros(nx,nd), zeros(nx,nw);
         A, B, B2];
     L2 = [zeros(nd,nx), eye(nd), zeros(nd,nw);
@@ -169,6 +170,7 @@ for model_idx =1:length(model_names)
         else
             fprintf('Trained parameters are not feasible: %s \n', sol.info)
         end
+        ga2s(end+1) = double(ga2);
 
     end
     
@@ -197,10 +199,17 @@ for model_idx =1:length(model_names)
     else
         fprintf('Trained parameters are not feasible: %s \n', sol.info)
     end
+    ga2s(end+1) = double(ga2);
 
     clear("H_tilde")
+    clear('H')
 
     % write l2 gain to validation log
+    evals = jsondecode(fileread(evaluation_file_name));
+    evals.additional_tests.stability_l2_upper_bound = struct('value',sqrt(min(ga2s)));
+    fid = fopen(evaluation_file_name, 'w');
+    fprintf(fid, '%s', jsonencode(evals,"PrettyPrint",true));
+    fclose(fid);
 %     fid = fopen(validation_log_file,'a+');
 %     fprintf(fid,'l2 gain: %f\n',sqrt(double(ga2)));
 %     fclose(fid);

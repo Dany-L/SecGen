@@ -1,6 +1,6 @@
 Recurrent neural networks for system identification with quadratic constraints. In this package we evaluate the use of generalized sector conditions and how they can be used in system identification.
 
-## ```deepsysid````
+## deepsysid
 The configuration was used from [deepsysid][https://github.com/AlexandraBaier/deepsysid]. In contrast to ```deepsysid``` in this work we wanted to pull out the training, simulation, saving, loading, ... functionality out of the models and therefore started a new project.
 
 ## Environment variables
@@ -48,3 +48,6 @@ python scripts/evaluate_model.py --model_name <MODEL_NAME> # e.g. tanh, dzn, dzn
 ```
 ## tikzplotlib
 In `utils/plot.py` we use the package [tikzplotlib](https://pypi.org/project/tikzplotlib/) which is outdated and does not work with most recent `matplotlib` package. You can simply remove `tikzplotlib` and its corresponding calls in `plot.py`, then you will only get `*.png` images.
+
+## mosek
+For finding initial parameters and projecting the updated parameter if they are infeasible we use [mosek](https://www.mosek.com/) in the [cvxpy](https://www.cvxpy.org/index.html) package. Other solver like `cp.SCS` should also work and can be configured in `ConstrainedModuleConfig.sdp_opt`.

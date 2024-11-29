@@ -6,8 +6,11 @@ import numpy as np
 import torch
 
 from . import metrics
-from .additional_tests import (AdditionalTest, AdditionalTestResult,
-                               retrieve_additional_test_class)
+from .additional_tests import (
+    AdditionalTest,
+    AdditionalTestResult,
+    retrieve_additional_test_class,
+)
 from .configuration.base import InputOutput, Normalization
 from .configuration.experiment import load_configuration
 from .data_io import get_result_directory_name, load_data, load_normalization
@@ -114,7 +117,7 @@ def evaluate(
     stop_time = time.time()
     training_duration = utils.get_duration_str(start_time, stop_time)
     tracker.track(ev.Log("", f"Evaluation duration: {training_duration}"))
-    tracker.track(ev.TrackParameter("", "evaluation_duration", training_duration))
+    tracker.track(ev.TrackMetrics("", {"evaluation_duration": stop_time - start_time}))
     tracker.track(ev.Stop(""))
 
 
@@ -194,7 +197,7 @@ def evaluate_model(
     tracker.track(ev.SaveSequences("", input_outputs, f"test_output-{dataset_name}"))
     tracker.track(ev.Log("", f"Number of parameters: {results['num_parameters']}"))
 
-    tracker.track(ev.TrackParameters("", f"{mode}-eval", results))
+    tracker.track(ev.TrackResults("", f"{mode}-eval", results))
 
     tracker.track(
         ev.SaveFig(

@@ -8,8 +8,12 @@ import torch
 from numpy.typing import NDArray
 from scipy.io import loadmat, savemat
 
-from .configuration.base import (DATASET_DIR_ENV_VAR, InputOutput,
-                                 Normalization, NormalizationParameters)
+from .configuration.base import (
+    DATASET_DIR_ENV_VAR,
+    InputOutput,
+    Normalization,
+    NormalizationParameters,
+)
 from .models.base import ConstrainedModule
 
 

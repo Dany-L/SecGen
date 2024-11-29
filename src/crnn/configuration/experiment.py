@@ -4,8 +4,7 @@ from typing import Any, Dict, List, Literal
 
 from pydantic import BaseModel
 
-from ..additional_tests import (AdditionalTestConfig,
-                                retrieve_additional_test_class)
+from ..additional_tests import AdditionalTestConfig, retrieve_additional_test_class
 from ..metrics import MetricConfig, retrieve_metric_class
 from ..models.base import DynamicIdentificationConfig, retrieve_model_class
 from ..tracker.base import BaseTrackerConfig, retrieve_tracker_class
@@ -89,6 +88,11 @@ class BaseExperimentConfig(BaseModel):
     output_names: List[str]
     horizons: HorizonsConfig
     initial_hidden_state: Literal["zero", "joint", "separate"]
+    t: float = 1.0
+    increase_rate: float = 10.0
+    increase_after_epochs: int = 100
+    debug: bool = False
+    ensure_constrained_method: Literal["armijo"] = None
 
 
 class ExperimentConfig(BaseModel):

@@ -1,6 +1,6 @@
 import os
 import time
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Callable
 
 import numpy as np
 import torch
@@ -8,7 +8,7 @@ from torch import nn
 from torch.optim import Optimizer, lr_scheduler
 from torch.utils.data import DataLoader
 
-from .configuration.experiment import load_configuration
+from .configuration.experiment import load_configuration, BaseExperimentConfig
 from .data_io import get_result_directory_name, load_data
 from .datasets import get_datasets, get_loaders
 from .loss import get_loss_function
@@ -19,6 +19,8 @@ from .tracker import events as ev
 from .tracker.base import AggregatedTracker, get_trackers_from_config
 from .utils import base as utils
 from .utils import plot
+import matplotlib.pyplot as plt
+from matplotlib.figure import Figure
 
 PLOT_AFTER_EPOCHS: int = 100
 
@@ -41,6 +43,8 @@ def train(
     model_config = config.models[model_name]
     trackers_config = config.trackers
     dataset_name = os.path.basename(os.path.dirname(dataset_dir))
+    if experiment_config.debug:
+        torch.manual_seed(42)
 
     trackers = get_trackers_from_config(
         trackers_config, result_directory, model_name, "training"
@@ -52,6 +56,20 @@ def train(
     tracker.track(ev.TrackParameter("", "device", device))
     tracker.track(ev.TrackParameter("", "model_class", model_config.m_class))
     tracker.track(ev.Log("", f"Train model {model_name} on {device}."))
+    tracker.track(
+        ev.TrackParameters(
+            "",
+            utils.get_config_file_name("experiment", model_name),
+            experiment_config.model_dump(),
+        )
+    )
+    tracker.track(
+        ev.TrackParameters(
+            "",
+            utils.get_config_file_name("model", model_name),
+            model_config.parameters.model_dump(),
+        )
+    )
 
     train_inputs, train_outputs = load_data(
         experiment_config.input_names,
@@ -106,7 +124,7 @@ def train(
             (initializer, predictor) = train_zero(
                 models=(initializer, predictor),
                 loaders=loaders,
-                epochs=experiment_config.epochs,
+                exp_config=experiment_config,
                 optimizers=optimizers,
                 loss_function=loss_fcn,
                 schedulers=schedulers,
@@ -116,7 +134,7 @@ def train(
             (initializer, predictor) = train_joint(
                 models=(initializer, predictor),
                 loaders=loaders,
-                epochs=experiment_config.epochs,
+                exp_config=experiment_config,
                 optimizers=optimizers,
                 loss_function=loss_fcn,
                 schedulers=schedulers,
@@ -126,7 +144,7 @@ def train(
             (initializer, predictor) = train_separate(
                 models=(initializer, predictor),
                 loaders=loaders,
-                epochs=experiment_config.epochs,
+                exp_config=experiment_config,
                 optimizers=optimizers,
                 loss_function=loss_fcn,
                 schedulers=schedulers,
@@ -145,20 +163,6 @@ def train(
         tracker.track(ev.SaveModel("", initializer, "initializer"))
     tracker.track(ev.SaveModelParameter("", predictor))
     tracker.track(
-        ev.TrackParameters(
-            "",
-            utils.get_config_file_name("experiment", model_name),
-            experiment_config.model_dump(),
-        )
-    )
-    tracker.track(
-        ev.TrackParameters(
-            "",
-            utils.get_config_file_name("model", model_name),
-            model_config.parameters.model_dump(),
-        )
-    )
-    tracker.track(
         ev.SaveTrackingConfiguration("", trackers_config, model_name, result_directory)
     )
     tracker.track(ev.Stop(""))
@@ -167,7 +171,7 @@ def train(
 def train_joint(
     models: Tuple[base.ConstrainedModule],
     loaders: Tuple[DataLoader],
-    epochs: int,
+    exp_config: BaseExperimentConfig,
     optimizers: List[Optimizer],
     loss_function: nn.Module,
     schedulers: List[lr_scheduler.ReduceLROnPlateau],
@@ -183,9 +187,13 @@ def train_joint(
     tracker.track(ev.Log("", f"Initialize parameters: {problem_status}"))
     predictor.set_lure_system()
     predictor.train()
-    t, increase_rate, increase_after_epochs = 1.0, 10.0, 100
+    t, increase_rate, increase_after_epochs = (
+        exp_config.t,
+        exp_config.increase_rate,
+        exp_config.increase_after_epochs,
+    )
 
-    for epoch in range(epochs):
+    for epoch in range(exp_config.epochs):
         loss, phi = 0.0, 0.0  # phi is barrier
         for step, batch in enumerate(train_loader):
             predictor.zero_grad()
@@ -193,7 +201,7 @@ def train_joint(
             e_hat_init, h0 = initializer.forward(batch["d_init"])
             e_hat, _ = predictor.forward(batch["d"], h0)
             batch_loss_predictor = loss_function(e_hat, batch["e"])
-            batch_phi = get_barrier(predictor, t)
+            batch_phi = predictor.get_phi(t)
             batch_loss_initializer = loss_function(
                 e_hat_init[:, -1, :], batch["e_init"][:, -1, :]
             )
@@ -221,7 +229,9 @@ def train_joint(
             tracker.track(ev.Log("", f"Projecting parameters: {problem_status}"))
             predictor.set_lure_system()
 
-        tracker.track(ev.Log("", f"{epoch}/{epochs}\t l= {loss:.2f} \t phi= {phi:.2f}"))
+        tracker.track(
+            ev.Log("", f"{epoch}/{exp_config.epochs}\t l= {loss:.2f} \t phi= {phi:.2f}")
+        )
         tracker.track(
             ev.TrackMetrics(
                 "",
@@ -250,7 +260,7 @@ def train_joint(
 def train_zero(
     models: Tuple[base.ConstrainedModule],
     loaders: Tuple[DataLoader],
-    epochs: int,
+    exp_config: BaseExperimentConfig,
     optimizers: List[Optimizer],
     schedulers: List[lr_scheduler.ReduceLROnPlateau],
     loss_function: nn.Module,
@@ -263,37 +273,64 @@ def train_zero(
     predictor.initialize_parameters()
     predictor.set_lure_system()
     predictor.train()
-    t, increase_rate, increase_after_epochs = 1.0, 10.0, 100
+    t, increase_rate, increase_after_epochs = (
+        exp_config.t,
+        exp_config.increase_rate,
+        exp_config.increase_after_epochs,
+    )
 
-    for epoch in range(epochs):
+    for epoch in range(exp_config.epochs):
         loss, phi = 0.0, 0.0  # phi is barrier
         for step, batch in enumerate(train_loader):
             predictor.zero_grad()
-            e_hat, _ = predictor.forward(batch["d"])
-            batch_loss = loss_function(e_hat, batch["e"])
-            batch_phi = get_barrier(predictor, t)
-            (batch_loss + batch_phi).backward()
-            opt_pred.step()
+            if exp_config.ensure_constrained_method == "armijo":
+                opt_fcn = base.OptFcn(
+                    batch["d"], batch["e"], predictor, t, l=loss_function
+                )
+                f = lambda theta: opt_fcn.f(theta)
+                dF = lambda theta: opt_fcn.dF(theta).reshape((-1, 1))
+
+                theta = torch.hstack(
+                    [
+                        p.flatten().clone()
+                        for p in predictor.parameters()
+                        if p is not None
+                    ]
+                ).reshape(-1, 1)
+
+                old_theta = theta.clone()
+                batch_loss, batch_phi = f(theta), torch.tensor(0.0)
+
+                arm = Armijo(f, dF, 1)
+                # if step == 0 and epoch % PLOT_AFTER_EPOCHS == 0:
+                #     fig = arm.plot_step_size_function(old_theta)
+                #     tracker.track(ev.SaveFig('', fig, f'step_size_plot-{epoch}'))
+                dir = -dF(old_theta)
+                s = arm.linesearch(old_theta, dir)
+                new_theta = old_theta + s * dir
+                opt_fcn.set_vec_pars_to_model(new_theta)
+
+                print(f"{step}: loss: {batch_loss:.2f}, s: {s:.2g}")
+
+            else:
+                e_hat, _ = predictor.forward(batch["d"])
+                batch_loss = loss_function(e_hat, batch["e"])
+                batch_phi = predictor.get_phi(t)
+                (batch_loss + batch_phi).backward()
+                opt_pred.step()
+
             predictor.set_lure_system()
             loss += batch_loss.item()
             phi += batch_phi.item()
-        if epoch % PLOT_AFTER_EPOCHS == 0:
-            fig = plot.plot_sequence(
-                [
-                    e_hat[0, :].cpu().detach().numpy(),
-                    batch["e"][0, :].cpu().detach().numpy(),
-                ],
-                0.01,
-                title="normalized output",
-                legend=[r"$\hat e$", r"$e$"],
-            )
-            tracker.track(ev.SaveFig("", fig, f"e_{epoch}"))
+
         if not predictor.check_constraints():
             problem_status = predictor.project_parameters()
             tracker.track(ev.Log("", f"Projecting parameters: {problem_status}"))
             predictor.set_lure_system()
 
-        tracker.track(ev.Log("", f"{epoch}/{epochs}\t l= {loss:.2f} \t phi= {phi:.2f}"))
+        tracker.track(
+            ev.Log("", f"{epoch}/{exp_config.epochs}\t l= {loss:.2f} \t phi= {phi:.2f}")
+        )
         tracker.track(
             ev.TrackMetrics(
                 "",
@@ -317,7 +354,7 @@ def train_zero(
 def train_separate(
     models: Tuple[base.ConstrainedModule],
     loaders: Tuple[DataLoader],
-    epochs: int,
+    exp_config: BaseExperimentConfig,
     optimizers: List[Optimizer],
     schedulers: List[lr_scheduler.ReduceLROnPlateau],
     loss_function: nn.Module,
@@ -334,10 +371,14 @@ def train_separate(
     tracker.track(ev.Log("", f"Initialize parameters: {problem_status}"))
     predictor.set_lure_system()
     predictor.train()
-    t, increase_rate, increase_after_epochs = 1.0, 10.0, 100
+    t, increase_rate, increase_after_epochs = (
+        exp_config.t,
+        exp_config.increase_rate,
+        exp_config.increase_after_epochs,
+    )
 
     # initializer
-    for epoch in range(epochs):
+    for epoch in range(exp_config.epochs):
         loss = 0
         for step, batch in enumerate(init_loader):
             initializer.zero_grad()
@@ -348,7 +389,9 @@ def train_separate(
             initializer.set_lure_system()
             loss += batch_loss.item()
 
-        tracker.track(ev.Log("", f"{epoch}/{epochs} (initializer)\t l= {loss:.2f}"))
+        tracker.track(
+            ev.Log("", f"{epoch}/{exp_config.epochs} (initializer)\t l= {loss:.2f}")
+        )
         tracker.track(
             ev.TrackMetrics("", {"epoch.loss.initializer": float(loss)}, epoch)
         )
@@ -356,7 +399,7 @@ def train_separate(
         sch_init.step(loss)
 
     # predictor
-    for epoch in range(epochs):
+    for epoch in range(exp_config.epochs):
         loss, phi = 0.0, 0.0  # phi is barrier
         for step, batch in enumerate(pred_loader):
             predictor.zero_grad()
@@ -365,7 +408,7 @@ def train_separate(
                 _, h0 = initializer.forward(batch["d_init"])
             e_hat, _ = predictor.forward(batch["d"], h0)
             batch_loss = loss_function(e_hat, batch["e"])
-            batch_phi = get_barrier(predictor, t)
+            batch_phi = predictor.get_phi(t)
             (batch_loss + batch_phi).backward()
             opt_pred.step()
             predictor.set_lure_system()
@@ -389,7 +432,9 @@ def train_separate(
             tracker.track(ev.Log("", f"Projecting parameters: {problem_status}"))
             predictor.set_lure_system()
 
-        tracker.track(ev.Log("", f"{epoch}/{epochs}\t l= {loss:.2f} \t phi= {phi:.2f}"))
+        tracker.track(
+            ev.Log("", f"{epoch}/{exp_config.epochs}\t l= {loss:.2f} \t phi= {phi:.2f}")
+        )
         tracker.track(
             ev.TrackMetrics(
                 "",
@@ -410,15 +455,71 @@ def train_separate(
     return (initializer, predictor)
 
 
-def get_barrier(predictor: base.DynamicIdentificationModel, t: float) -> torch.Tensor:
-    if predictor.sdp_constraints() is not None:
-        batch_phi = (
-            1
-            / t
-            * torch.sum(
-                torch.tensor([-torch.logdet(-M()) for M in predictor.sdp_constraints()])
-            )
+class Armijo:
+    def __init__(
+        self,
+        f: Callable[[torch.Tensor], torch.Tensor],
+        dF: Callable[[torch.Tensor], torch.Tensor],
+        s0: float = 1.0,
+        alpha: float = 0.4,
+        beta: float = 0.4,
+    ):
+        self.f = f
+        self.dF = dF
+        self.s0 = s0
+        self.alpha = alpha
+        self.beta = beta
+
+    def linesearch(self, theta: torch.Tensor, dir: torch.Tensor) -> torch.Tensor:
+        i = 0
+        f, dF, s, alpha, beta = self.f, self.dF, self.s0, self.alpha, self.beta
+        while f(theta + s * dir) > f(theta) + alpha * s * dir.T @ dF(
+            theta
+        ) or torch.isnan(f(theta + s * dir)):
+            s = beta * s
+            i += 1
+            if i > 100:
+                raise ValueError
+        # print(f'linesearch steps: {i}')
+        return s
+
+    def plot_step_size_function(self, theta) -> Figure:
+        ss, s = [], self.s0
+        for i in range(10):
+            ss.append(s)
+            s = self.beta * s
+
+        fig, ax = plt.subplots(figsize=(10, 5))
+        dir = -self.dF(theta)
+        s = np.linspace(0, 1, 100)
+        # print(f'dF(theta):{self.dF(theta)}, theta:{theta}')
+        ax.plot(
+            s,
+            np.vectorize(lambda s: (self.f(theta + s * dir)).detach().numpy())(s),
+            label="f(x+sd)",
         )
-    else:
-        batch_phi = torch.tensor(0.0)
-    return batch_phi
+        ax.plot(
+            s,
+            np.vectorize(
+                lambda s: (self.f(theta) + s * self.dF(theta).T @ dir).detach().numpy()
+            )(s),
+            label="f(x)+s dF.T d",
+        )
+        ax.plot(
+            s,
+            np.vectorize(
+                lambda s: (self.f(theta) + self.alpha * s * self.dF(theta).T @ dir)
+                .detach()
+                .numpy()
+            )(s),
+            label="f(x)+alpha s dF.T d",
+        )
+        # for s in ss:
+        #     ax.plot(s,self.f(theta)+self.alpha*s*self.dF(theta).T @ dir, 'x')
+        #     ax.plot(s,self.f(theta)+s*self.dF(theta).T @ dir, 'x')
+        #     ax.plot(s,self.f(theta+s*dir),'x')
+        ax.grid()
+        ax.set_xlabel("s")
+        ax.legend()
+
+        return fig

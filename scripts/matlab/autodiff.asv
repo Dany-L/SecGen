@@ -1,11 +1,30 @@
-syms c2 d21 d12 x0 d0 d1
+clear all, close all
+syms C2 [2 2]
+syms D21 [2 1]
+syms D12 [1 2]
+syms x0 [2 1]
+syms d1 x d0 e0
 
-x1 = tanh(c2*x0 + d21*d0);
-e_hat_0 = d12*x;
+x1 = tanh(C2*x0 + D21*d0);
+e_hat0 = D12*x1;
 
-diff(e_hat_0, d12)
-diff(e_hat_0, c2)
-diff(e_hat_0, d21)
+l = (e_hat0 - e0)^2;
+x01 = 1; x02=1;d0=1;e0=1;
+G = gradient(subs(l));
+length(G)
 
+matlabFunction(subs(l))
 
-e_hat_1 = d12*tanh(c2*x1 + d21*d1);
+C21_1 = -0.2998; C21_2 = -0.2742;
+C22_1= -0.7764; C22_2=  0.1240;
+D21
+
+name C2, parameter Parameter containing:
+tensor([[-0.2998, ],
+        []], requires_grad=True)
+name D21, parameter Parameter containing:
+tensor([[0.0549],
+        [0.5914]], requires_grad=True)
+name D12, parameter Parameter containing:
+tensor([[0.6986, 1.0906]], requires_grad=True)
+
