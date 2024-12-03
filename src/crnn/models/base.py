@@ -500,6 +500,8 @@ class OptFcn:
         for p in self.nn.parameters():
             if p.grad is not None:
                 grads.append(p.grad.flatten())
+            else:
+                grads.append(torch.zeros_like(p).flatten())
 
         return torch.hstack(grads).reshape(-1, 1)
 

@@ -310,7 +310,12 @@ def train_zero(
                 new_theta = old_theta + s * dir
                 opt_fcn.set_vec_pars_to_model(new_theta)
 
-                print(f"{step}: loss: {batch_loss:.2f}, s: {s:.2g}")
+                tracker.track(ev.TrackMetrics("", {
+                        "loss.step": float(batch_loss),
+                        "stepsize.step": float(s),
+                    },
+                    epoch * len(train_loader) + step
+                ))
 
             else:
                 e_hat, _ = predictor.forward(batch["d"])
