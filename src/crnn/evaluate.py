@@ -16,8 +16,10 @@ from .configuration.experiment import load_configuration
 from .data_io import get_result_directory_name, load_data, load_normalization
 from .datasets import RecurrentWindowHorizonDataset
 from .metrics import retrieve_metric_class
-from .models import base as base_models
-from .models.model_io import get_model_from_config
+from .models import base
+from .models import base_jax
+from .models import base_torch
+from .models.model_io import get_model_from_config, load_model
 from .tracker import events as ev
 from .tracker.base import AggregatedTracker, get_trackers_from_config
 from .utils import base as utils
@@ -69,25 +71,7 @@ def evaluate(
 
     initializer, predictor = get_model_from_config(model_config)
 
-    if experiment_config.initial_hidden_state == "zero":
-        initializer, predictor = None, base_models.load_model(
-            predictor,
-            os.path.join(
-                result_directory, utils.get_model_file_name("predictor", model_name)
-            ),
-        )
-    else:
-        initializer, predictor = (
-            base_models.load_model(
-                model,
-                os.path.join(
-                    result_directory, utils.get_model_file_name(name, model_name)
-                ),
-            )
-            for model, name in zip(
-                [initializer, predictor], ["initializer", "predictor"]
-            )
-        )
+    initializer, predictor = load_model(experiment_config,initializer,predictor,model_name, result_directory)
 
     metrics = dict()
     for name, metric_config in metrics_config.items():
@@ -122,7 +106,7 @@ def evaluate(
 
 
 def evaluate_model(
-    models: Tuple[base_models.ConstrainedModule],
+    models: Tuple[base.DynamicIdentificationModel],
     test_dataset: RecurrentWindowHorizonDataset,
     metrics: Dict[str, metrics.Metrics],
     normalization: Normalization,
@@ -138,13 +122,17 @@ def evaluate_model(
 
     es, e_hats, ds = [], [], []
     for _, sample in enumerate(test_dataset):
-        if initializer is not None:
+        if hasattr(predictor, 'theta'):
+            theta = predictor.theta
+        else:
+            theta = None
+        if initializer is not None and isinstance(initializer, base_torch.DynamicIdentificationModel):
             _, h0 = initializer.forward(
                 torch.unsqueeze(torch.tensor(sample["d_init"]), 0)
             )
         else:
             h0 = None
-        e_hat, _ = predictor.forward(torch.unsqueeze(torch.tensor(sample["d"]), 0), h0)
+        e_hat, _ = predictor.forward(torch.unsqueeze(torch.tensor(sample["d"]), 0), h0, theta)
         e_hats.append(torch.squeeze(e_hat, 0).cpu().detach().numpy())
         es.append(sample["e"])
         ds.append(sample["d"])
@@ -164,34 +152,33 @@ def evaluate_model(
         tracker.track(ev.Log("", f"{name}: {np.mean(e):.2f}"))
         tracker.track(ev.TrackMetrics("", {name: float(np.mean(e))}))
         metrics_result[name] = float(e)
-    results["num_parameters"] = sum(
-        p.numel() for p in predictor.parameters() if p.requires_grad
-    )
+    results["num_parameters"] = predictor.get_number_of_parameters()
     results["metrics"] = metrics_result
 
     additional_test_results: Dict[str, AdditionalTestResult] = dict()
-    for name, additional_test in additional_tests.items():
-        tracker.track(ev.Log("", f"Running additional test {name}"))
-        result = additional_test.test()
-        tracker.track(ev.Log("", f"{name}: {result.value:.2f}"))
-        tracker.track(
-            ev.SaveFig(
-                "",
-                plot.plot_sequence(
-                    [result.input_output[0].e_hat[0]], 0.01, name, ["e_hat"]
-                ),
-                f"{name}-{dataset_name}",
+    if isinstance(predictor, base_torch.DynamicIdentificationModel):
+        for name, additional_test in additional_tests.items():
+            tracker.track(ev.Log("", f"Running additional test {name}"))
+            result = additional_test.test()
+            tracker.track(ev.Log("", f"{name}: {result.value:.2f}"))
+            tracker.track(
+                ev.SaveFig(
+                    "",
+                    plot.plot_sequence(
+                        [result.input_output[0].e_hat[0]], 0.01, name, ["e_hat"]
+                    ),
+                    f"{name}-{dataset_name}",
+                )
             )
-        )
-        additional_test_results[name] = dict(value=result.value)
-        tracker.track(
-            ev.SaveSequences(
-                "",
-                result.input_output,
-                f"test_output-{name}-{dataset_name}",
+            additional_test_results[name] = dict(value=result.value)
+            tracker.track(
+                ev.SaveSequences(
+                    "",
+                    result.input_output,
+                    f"test_output-{name}-{dataset_name}",
+                )
             )
-        )
-        tracker.track(ev.TrackMetrics("", {name: result.value}))
+            tracker.track(ev.TrackMetrics("", {name: result.value}))
     results["additional_tests"] = additional_test_results
 
     tracker.track(ev.SaveSequences("", input_outputs, f"test_output-{dataset_name}"))

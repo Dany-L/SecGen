@@ -7,12 +7,13 @@ import torch
 from ..utils import base as utils
 from ..utils import transformation as trans
 from . import base
+from . import base_torch
 
 
-class SectorBoundedLtiRnn(base.StableConstrainedModule):
-    CONFIG = base.ConstrainedModuleConfig
+class SectorBoundedLtiRnn(base_torch.StableConstrainedModule):
+    CONFIG = base_torch.ConstrainedModuleConfig
 
-    def __init__(self, config: base.ConstrainedModuleConfig) -> None:
+    def __init__(self, config: base_torch.ConstrainedModuleConfig) -> None:
         super().__init__(config)
 
     def pointwise_constraints(self) -> List[Callable]:
@@ -103,10 +104,10 @@ class SectorBoundedLtiRnn(base.StableConstrainedModule):
         return problem.status
 
 
-class GeneralSectorBoundedLtiRnn(base.StableConstrainedModule):
-    CONFIG = base.ConstrainedModuleConfig
+class GeneralSectorBoundedLtiRnn(base_torch.StableConstrainedModule):
+    CONFIG = base_torch.ConstrainedModuleConfig
 
-    def __init__(self, config: base.ConstrainedModuleConfig) -> None:
+    def __init__(self, config: base_torch.ConstrainedModuleConfig) -> None:
         super().__init__(config)
         # self.tracker = tracker
         self.H = torch.nn.Parameter(torch.zeros((self.nz, self.nx)))
@@ -222,10 +223,10 @@ class GeneralSectorBoundedLtiRnn(base.StableConstrainedModule):
         return problem.status
 
 
-class BasicLtiRnn(base.ConstrainedModule):
-    CONFIG = base.ConstrainedModuleConfig
+class BasicLtiRnn(base_torch.ConstrainedModule):
+    CONFIG = base_torch.ConstrainedModuleConfig
 
-    def __init__(self, config: base.ConstrainedModuleConfig) -> None:
+    def __init__(self, config: base_torch.ConstrainedModuleConfig) -> None:
         super().__init__(config)
         self.nonlinearity = config.nonlinearity
 

@@ -7,7 +7,7 @@ import torch
 from pydantic import BaseModel
 
 from .configuration.base import InputOutput
-from .models.base import DynamicIdentificationModel
+from .models.base_torch import ConstrainedModule
 from .models.recurrent import BasicLstm, BasicRnn
 from .tracker import events as ev
 from .tracker.base import AggregatedTracker
@@ -35,7 +35,7 @@ class AdditionalTest:
     def __init__(
         self,
         config: AdditionalTestConfig,
-        model: DynamicIdentificationModel,
+        model: ConstrainedModule,
         tracker: AggregatedTracker = AggregatedTracker(),
     ):
         self.epochs = config.epochs
@@ -58,7 +58,7 @@ class StabilityOfInitialState(AdditionalTest):
         d = torch.zeros(1, self.horizon, self.nd)
         xk_norm_max, e_hat_max, x0_max = (
             torch.tensor(0.0),
-            np.zeros((self.horizon, self.ne)),
+            torch.zeros((self.horizon, self.ne)),
             (torch.zeros((self.nx, 1))),
         )
 
@@ -158,7 +158,7 @@ class InputOutputStabilityL2(AdditionalTest):
 
 
 def get_x0(
-    model: DynamicIdentificationModel, B: int
+    model: ConstrainedModule, B: int
 ) -> Union[Tuple[torch.Tensor], Tuple[torch.Tensor, torch.Tensor]]:
     if isinstance(model, BasicLstm):
         x0 = (
@@ -173,7 +173,7 @@ def get_x0(
 
 
 def get_xk(
-    model: DynamicIdentificationModel,
+    model: ConstrainedModule,
     x: Union[Tuple[torch.Tensor, torch.Tensor], Tuple[torch.Tensor]],
 ) -> torch.Tensor:
     if isinstance(model, BasicLstm):

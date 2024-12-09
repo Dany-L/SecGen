@@ -4,7 +4,7 @@ from typing import Any, Dict, List, Literal, Optional, Union
 from matplotlib.figure import Figure
 
 from ..configuration.base import InputOutput, NormalizationParameters
-from ..models.base import ConstrainedModule
+from ..models.base import DynamicIdentificationModel
 from .base import BaseTrackerConfig, Event
 
 
@@ -55,7 +55,7 @@ class TrackMetrics(Event):
 
 @dataclasses.dataclass
 class ModelEvent(Event):
-    model: ConstrainedModule
+    model: DynamicIdentificationModel
 
 
 @dataclasses.dataclass

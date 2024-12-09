@@ -7,14 +7,19 @@ import torch
 from torch import nn
 from torch.optim import Optimizer, lr_scheduler
 from torch.utils.data import DataLoader
+import jax.numpy as jnp
+from jax import grad, vmap, debug
 
 from .configuration.experiment import load_configuration, BaseExperimentConfig
 from .data_io import get_result_directory_name, load_data
 from .datasets import get_datasets, get_loaders
 from .loss import get_loss_function
 from .models import base
+from .models import base_jax
+from .models import base_torch
 from .models.model_io import get_model_from_config
 from .optimizer import get_optimizer
+from .scheduler import get_scheduler
 from .tracker import events as ev
 from .tracker.base import AggregatedTracker, get_trackers_from_config
 from .utils import base as utils
@@ -110,14 +115,11 @@ def train(
         )
 
         initializer, predictor = get_model_from_config(model_config)
-
         optimizers = get_optimizer(
-            experiment_config, (initializer.parameters(), predictor.parameters())
+            experiment_config, (initializer, predictor)
         )
-        schedulers = [
-            lr_scheduler.ReduceLROnPlateau(optimizer, "min", patience=50)
-            for optimizer in optimizers
-        ]
+        schedulers = get_scheduler(optimizers)
+
         loss_fcn = get_loss_function(experiment_config.loss_function)
 
         if experiment_config.initial_hidden_state == "zero":
@@ -169,14 +171,14 @@ def train(
 
 
 def train_joint(
-    models: Tuple[base.ConstrainedModule],
+    models: Tuple[base.DynamicIdentificationModel],
     loaders: Tuple[DataLoader],
     exp_config: BaseExperimentConfig,
     optimizers: List[Optimizer],
     loss_function: nn.Module,
     schedulers: List[lr_scheduler.ReduceLROnPlateau],
     tracker: AggregatedTracker = AggregatedTracker(),
-) -> Tuple[Optional[base.ConstrainedModule]]:
+) -> Tuple[Optional[base.DynamicIdentificationModel]]:
     _, train_loader = loaders
     initializer, predictor = models
     (opt_pred,) = optimizers
@@ -196,20 +198,35 @@ def train_joint(
     for epoch in range(exp_config.epochs):
         loss, phi = 0.0, 0.0  # phi is barrier
         for step, batch in enumerate(train_loader):
-            predictor.zero_grad()
-            initializer.zero_grad()
-            e_hat_init, h0 = initializer.forward(batch["d_init"])
-            e_hat, _ = predictor.forward(batch["d"], h0)
-            batch_loss_predictor = loss_function(e_hat, batch["e"])
-            batch_phi = predictor.get_phi(t)
-            batch_loss_initializer = loss_function(
-                e_hat_init[:, -1, :], batch["e_init"][:, -1, :]
-            )
-            batch_loss = batch_loss_predictor + batch_loss_initializer
-            (batch_loss + batch_phi).backward()
-            opt_pred.step()
-            predictor.set_lure_system()
-            initializer.set_lure_system()
+            if isinstance(predictor, base_jax.ConstrainedModule):
+                # only for compatibility, same behavior as zero initialization
+                d, e = batch["d"].cpu().detach().numpy(), batch["e"].cpu().detach().numpy()
+                theta = predictor.theta
+                def f(theta, d, e, x0=None):
+                    e_hat, _ = predictor.forward(d,x0,theta)
+                    return jnp.mean((e_hat - e)**2)
+                
+                df = grad(f)
+                theta = base_jax.update(theta, f, df, d,e)
+                predictor.theta = theta
+                e_hat = torch.from_dlpack(predictor.forward(d,None,theta)[0])
+                batch_loss = torch.from_dlpack(f(theta, d,e))
+                batch_phi = torch.tensor([0.0])
+            else:
+                predictor.zero_grad()
+                initializer.zero_grad()
+                e_hat_init, h0 = initializer.forward(batch["d_init"])
+                e_hat, _ = predictor.forward(batch["d"], h0)
+                batch_loss_predictor = loss_function(e_hat, batch["e"])
+                batch_phi = predictor.get_phi(t)
+                batch_loss_initializer = loss_function(
+                    e_hat_init[:, -1, :], batch["e_init"][:, -1, :]
+                )
+                batch_loss = batch_loss_predictor + batch_loss_initializer
+                (batch_loss + batch_phi).backward()
+                opt_pred.step()
+                predictor.set_lure_system()
+                initializer.set_lure_system()
             loss += batch_loss.item()
             phi += batch_phi.item()
         if epoch % PLOT_AFTER_EPOCHS == 0:
@@ -243,7 +260,8 @@ def train_joint(
             )
         )
 
-        sch_pred.step(loss)
+        if sch_pred is not None:
+            sch_pred.step(loss)
 
         if (epoch + 1) % increase_after_epochs == 0:
             t = t * increase_rate
@@ -258,64 +276,81 @@ def train_joint(
 
 
 def train_zero(
-    models: Tuple[base.ConstrainedModule],
+    models: Tuple[base.DynamicIdentificationModel],
     loaders: Tuple[DataLoader],
     exp_config: BaseExperimentConfig,
     optimizers: List[Optimizer],
     schedulers: List[lr_scheduler.ReduceLROnPlateau],
     loss_function: nn.Module,
     tracker: AggregatedTracker = AggregatedTracker(),
-) -> Tuple[Optional[base.ConstrainedModule]]:
+) -> Tuple[Optional[base.DynamicIdentificationModel]]:
     _, train_loader = loaders
     _, predictor = models
     _, opt_pred = optimizers
     _, sch_pred = schedulers
     predictor.initialize_parameters()
     predictor.set_lure_system()
-    predictor.train()
+    # predictor.train()
     t, increase_rate, increase_after_epochs = (
         exp_config.t,
         exp_config.increase_rate,
         exp_config.increase_after_epochs,
     )
 
+    s = 0.01
     for epoch in range(exp_config.epochs):
         loss, phi = 0.0, 0.0  # phi is barrier
+        
         for step, batch in enumerate(train_loader):
-            predictor.zero_grad()
+            # predictor.zero_grad()
             if exp_config.ensure_constrained_method == "armijo":
-                opt_fcn = base.OptFcn(
-                    batch["d"], batch["e"], predictor, t, l=loss_function
-                )
-                f = lambda theta: opt_fcn.f(theta)
-                dF = lambda theta: opt_fcn.dF(theta).reshape((-1, 1))
+                if isinstance(predictor, base_jax.ConstrainedModule):
+                    d, e = batch["d"].cpu().detach().numpy(), batch["e"].cpu().detach().numpy()
+                    theta = predictor.theta
+                    def f(theta, d, e, x0=None):
+                        e_hat, _ = predictor.forward(d,x0,theta)
+                        return jnp.mean((e_hat - e)**2)
+                    
+                    df = grad(f)
+                    theta = base_jax.update(theta, f, df, d,e)
+                    predictor.theta = theta
+                    batch_loss = torch.from_dlpack(f(theta, d,e))
+                    batch_phi = torch.tensor([0.0])
 
-                theta = torch.hstack(
-                    [
-                        p.flatten().clone()
-                        for p in predictor.parameters()
-                        if p is not None
-                    ]
-                ).reshape(-1, 1)
 
-                old_theta = theta.clone()
-                batch_loss, batch_phi = f(theta), torch.tensor(0.0)
+                elif isinstance(predictor, base_torch.DynamicIdentificationModel):
+                    opt_fcn = base_torch.OptFcn(
+                        batch["d"], batch["e"], predictor, t, l=loss_function
+                    )
+                    f = lambda theta: opt_fcn.f(theta)
+                    dF = lambda theta: opt_fcn.dF(theta).reshape((-1, 1))
 
-                arm = Armijo(f, dF, 1)
-                # if step == 0 and epoch % PLOT_AFTER_EPOCHS == 0:
-                #     fig = arm.plot_step_size_function(old_theta)
-                #     tracker.track(ev.SaveFig('', fig, f'step_size_plot-{epoch}'))
-                dir = -dF(old_theta)
-                s = arm.linesearch(old_theta, dir)
-                new_theta = old_theta + s * dir
-                opt_fcn.set_vec_pars_to_model(new_theta)
+                    theta = torch.hstack(
+                        [
+                            p.flatten().clone()
+                            for p in predictor.parameters()
+                            if p is not None
+                        ]
+                    ).reshape(-1, 1)
 
-                tracker.track(ev.TrackMetrics("", {
-                        "loss.step": float(batch_loss),
-                        "stepsize.step": float(s),
-                    },
-                    epoch * len(train_loader) + step
-                ))
+                    old_theta = theta.clone()
+                    batch_loss, batch_phi = f(theta), torch.tensor(0.0)
+
+                    arm = Armijo(f, dF, 1)
+                    # if step == 0 and epoch % PLOT_AFTER_EPOCHS == 0:
+                    #     fig = arm.plot_step_size_function(old_theta)
+                    #     tracker.track(ev.SaveFig('', fig, f'step_size_plot-{epoch}'))
+                    dir = -dF(old_theta)
+                    s = arm.linesearch(old_theta, dir)
+                    new_theta = old_theta + s * dir
+                    opt_fcn.set_vec_pars_to_model(new_theta)
+
+                    tracker.track(ev.TrackMetrics("", {
+                            "loss.step": float(batch_loss),
+                            "stepsize.step": float(s),
+                        },
+                        epoch * len(train_loader) + step
+                    ))
 
             else:
                 e_hat, _ = predictor.forward(batch["d"])
@@ -347,7 +382,8 @@ def train_zero(
             )
         )
 
-        sch_pred.step(loss)
+        if sch_pred is not None:
+            sch_pred.step(loss)
 
         if (epoch + 1) % increase_after_epochs == 0:
             t = t * increase_rate
@@ -357,14 +393,14 @@ def train_zero(
 
 
 def train_separate(
-    models: Tuple[base.ConstrainedModule],
+    models: Tuple[base.DynamicIdentificationModel],
     loaders: Tuple[DataLoader],
     exp_config: BaseExperimentConfig,
     optimizers: List[Optimizer],
     schedulers: List[lr_scheduler.ReduceLROnPlateau],
     loss_function: nn.Module,
     tracker: AggregatedTracker = AggregatedTracker(),
-) -> Tuple[Optional[base.ConstrainedModule]]:
+) -> Tuple[Optional[base.DynamicIdentificationModel]]:
     init_loader, pred_loader = loaders
     initializer, predictor = models
     opt_init, opt_pred = optimizers
@@ -386,12 +422,16 @@ def train_separate(
     for epoch in range(exp_config.epochs):
         loss = 0
         for step, batch in enumerate(init_loader):
-            initializer.zero_grad()
-            e_hat_init, _ = initializer.forward(batch["d"])
-            batch_loss = loss_function(e_hat_init[:, -1, :], batch["e"][:, -1, :])
-            batch_loss.backward()
-            opt_init.step()
-            initializer.set_lure_system()
+            if isinstance(initializer, base_jax.ConstrainedModule):
+                # only for compatibility, same behavior as zero initialization
+                batch_loss = torch.tensor([0.0])
+            else:
+                initializer.zero_grad()
+                e_hat_init, _ = initializer.forward(batch["d"])
+                batch_loss = loss_function(e_hat_init[:, -1, :], batch["e"][:, -1, :])
+                batch_loss.backward()
+                opt_init.step()
+                initializer.set_lure_system()
             loss += batch_loss.item()
 
         tracker.track(
@@ -401,22 +441,38 @@ def train_separate(
             ev.TrackMetrics("", {"epoch.loss.initializer": float(loss)}, epoch)
         )
 
-        sch_init.step(loss)
+        if sch_init is not None:
+            sch_init.step(loss)
 
     # predictor
     for epoch in range(exp_config.epochs):
         loss, phi = 0.0, 0.0  # phi is barrier
         for step, batch in enumerate(pred_loader):
-            predictor.zero_grad()
-            initializer.zero_grad()
-            with torch.no_grad():
-                _, h0 = initializer.forward(batch["d_init"])
-            e_hat, _ = predictor.forward(batch["d"], h0)
-            batch_loss = loss_function(e_hat, batch["e"])
-            batch_phi = predictor.get_phi(t)
-            (batch_loss + batch_phi).backward()
-            opt_pred.step()
-            predictor.set_lure_system()
+            if isinstance(predictor, base_jax.ConstrainedModule):
+                # only for compatibility, same behavior as zero initialization
+                d, e = batch["d"].cpu().detach().numpy(), batch["e"].cpu().detach().numpy()
+                theta = predictor.theta
+                def f(theta, d, e, x0=None):
+                    e_hat, _ = predictor.forward(d,x0,theta)
+                    return jnp.mean((e_hat - e)**2)
+                
+                df = grad(f)
+                theta = base_jax.update(theta, f, df, d,e)
+                predictor.theta = theta
+                e_hat = torch.from_dlpack(predictor.forward(d,None,theta)[0])
+                batch_loss = torch.from_dlpack(f(theta, d,e))
+                batch_phi = torch.tensor([0.0])
+            else:
+                predictor.zero_grad()
+                initializer.zero_grad()
+                with torch.no_grad():
+                    _, h0 = initializer.forward(batch["d_init"])
+                e_hat, _ = predictor.forward(batch["d"], h0)
+                batch_loss = loss_function(e_hat, batch["e"])
+                batch_phi = predictor.get_phi(t)
+                (batch_loss + batch_phi).backward()
+                opt_pred.step()
+                predictor.set_lure_system()
             loss += batch_loss.item()
             phi += batch_phi.item()
 
@@ -451,7 +507,8 @@ def train_separate(
             )
         )
 
-        sch_pred.step(loss)
+        if sch_pred is not None:
+            sch_pred.step(loss)
 
         if (epoch + 1) % increase_after_epochs == 0:
             t = t * increase_rate

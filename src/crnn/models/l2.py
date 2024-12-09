@@ -6,13 +6,13 @@ import torch
 
 from ..utils import base as utils
 from ..utils import transformation as trans
-from . import base
+from . import base_torch
 
 
-class L2Stable(base.IoConstrainedModule):
-    CONFIG = base.ConstrainedModuleConfig
+class L2Stable(base_torch.IoConstrainedModule):
+    CONFIG = base_torch.ConstrainedModuleConfig
 
-    def __init__(self, config: base.ConstrainedModuleConfig) -> None:
+    def __init__(self, config: base_torch.ConstrainedModuleConfig) -> None:
         super().__init__(config)
 
     def pointwise_constraints(self) -> List[Callable]:

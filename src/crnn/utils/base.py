@@ -34,7 +34,7 @@ def get_mean_std(
 
 
 def get_model_file_name(name: str, model_name: str) -> str:
-    return f"parameters-{name}-{model_name}.pth"
+    return f"parameters-{name}-{model_name}"
 
 
 def get_config_file_name(name: str, model_name: str) -> str:

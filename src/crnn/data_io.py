@@ -5,6 +5,7 @@ from typing import Any, Dict, List, Literal, Tuple
 import numpy as np
 import pandas as pd
 import torch
+import jax.numpy as jnp
 from numpy.typing import NDArray
 from scipy.io import loadmat, savemat
 
@@ -14,7 +15,10 @@ from .configuration.base import (
     Normalization,
     NormalizationParameters,
 )
-from .models.base import ConstrainedModule
+from .models import base as base
+from .models import base_jax as base_jax
+from .models import base_torch as base_torch
+
 
 
 def load_data(
@@ -88,7 +92,7 @@ def get_result_directory_name(
     return result_directory
 
 
-def save_model(model: ConstrainedModule, directory_name: str, file_name: str) -> None:
+def save_model(model: base.DynamicIdentificationModel, directory_name: str, file_name: str) -> None:
     """
     Save the parameters of a PyTorch model to a specified directory.
 
@@ -101,14 +105,22 @@ def save_model(model: ConstrainedModule, directory_name: str, file_name: str) ->
         str: The path to the saved model file.
     """
     file_path = os.path.join(directory_name, file_name)
-    torch.save(model.state_dict(), file_path)
+    if isinstance(model, base_jax.ConstrainedModule):
+        par_dict = {n:p for names, parameters in zip(model.parameter_names, model.theta) for n,p in zip(names, parameters)}
+        jnp.savez(file_path, **par_dict)
+    elif isinstance(model, base_torch.DynamicIdentificationModel):
+        torch.save(model.state_dict(), f'{file_path}.pth')
 
 
-def save_model_parameter(model: ConstrainedModule, file_name: str) -> None:
-    par_dict = {}
-    for name, var in model.named_parameters():
-        par_dict[name] = var.cpu().detach().numpy()
-    savemat(file_name, par_dict)
+def save_model_parameter(model: base.DynamicIdentificationModel, file_name: str) -> None:
+    if isinstance(model, base_jax.ConstrainedModule):
+        par_dict = {n:np.array(p) for names, parameters in zip(model.parameter_names, model.theta) for n,p in zip(names, parameters)}
+        savemat(file_name, par_dict)
+    elif isinstance(model, base_torch.DynamicIdentificationModel):
+        par_dict = {}
+        for name, var in model.named_parameters():
+            par_dict[name] = var.cpu().detach().numpy()
+        savemat(file_name, par_dict)
 
 
 def save_input_output_to_mat(sequences: List[InputOutput], file_name) -> None:

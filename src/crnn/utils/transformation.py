@@ -2,6 +2,9 @@ from typing import List
 
 import numpy as np
 import torch
+from jax import Array
+from jax.typing import ArrayLike
+import jax.numpy as jnp
 from numpy.typing import NDArray
 
 
@@ -17,3 +20,10 @@ def torch_bmat(mat: List[List[torch.Tensor]]) -> torch.Tensor:
     for col in mat:
         mat_list.append(torch.hstack(col))
     return torch.vstack(mat_list)
+
+
+def jax_bmat(mat: List[List[ArrayLike]]) -> Array:
+    mat_list = []
+    for col in mat:
+        mat_list.append(jnp.hstack(col))
+    return jnp.vstack(mat_list)
