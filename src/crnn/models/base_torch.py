@@ -12,22 +12,20 @@ from . import base
 
 from ..utils import transformation as trans
 
+
 class DynamicIdentificationConfig(base.DynamicIdentificationConfig):
     pass
 
+
 class DynamicIdentificationModel(base.DynamicIdentificationModel, nn.Module):
     def get_number_of_parameters(self):
-        return sum(
-                p.numel() for p in self.parameters() if p.requires_grad
-            )
-
+        return sum(p.numel() for p in self.parameters() if p.requires_grad)
 
 
 class ConstrainedModuleConfig(DynamicIdentificationConfig):
     sdp_opt: str = cp.MOSEK
     nonlinearity: Literal["tanh", "relu", "deadzone", "sat"] = "tanh"
     multiplier: Literal["none", "diag", "zf"] = "none"
-
 
 
 class ConstrainedModule(DynamicIdentificationModel):
@@ -98,7 +96,7 @@ class ConstrainedModule(DynamicIdentificationModel):
         x0: Optional[
             Union[Tuple[torch.Tensor, torch.Tensor], Tuple[torch.Tensor]]
         ] = None,
-        theta: Optional[List] = None
+        theta: Optional[List] = None,
     ) -> Tuple[
         torch.Tensor,
         Union[Tuple[torch.Tensor, torch.Tensor], Tuple[torch.Tensor]],
@@ -141,9 +139,6 @@ class ConstrainedModule(DynamicIdentificationModel):
         else:
             batch_phi = torch.tensor(0.0)
         return batch_phi
-
-
-    
 
 
 class StableConstrainedModule(ConstrainedModule):

@@ -43,9 +43,15 @@ class ConstrainedModule(base.DynamicIdentificationModel):
             self.L = jnp.ones((self.nz,))
         else:
             raise NotImplementedError(f"Unsupported multiplier: {config.multiplier}")
-        
-        self.parameter_names = [['A', 'B', 'B2'], ['C', 'D', 'D12'], ['C2', 'D21', 'D22']]
-        self.theta = jnp.zeros((self.nx+self.ne+self.nz, self.nx+self.nd+self.nw))
+
+        self.parameter_names = [
+            ["A", "B", "B2"],
+            ["C", "D", "D12"],
+            ["C2", "D21", "D22"],
+        ]
+        self.theta = jnp.zeros(
+            (self.nx + self.ne + self.nz, self.nx + self.nd + self.nw)
+        )
 
     def get_optimization_multiplier_and_constraints(
         self,
@@ -100,9 +106,7 @@ class ConstrainedModule(base.DynamicIdentificationModel):
             batch_phi = (
                 1
                 / t
-                * jnp.sum(
-                    jnp.array([-jnp.logdet(M()) for M in self.sdp_constraints()])
-                )
+                * jnp.sum(jnp.array([-jnp.logdet(M()) for M in self.sdp_constraints()]))
             )
         else:
             batch_phi = jnp.array(0.0)
@@ -111,8 +115,9 @@ class ConstrainedModule(base.DynamicIdentificationModel):
     def get_number_of_parameters(self):
         num_params = 0
         for par_rows in self.theta:
-            num_params += sum([p.size for p in par_rows ])
+            num_params += sum([p.size for p in par_rows])
         return num_params
+
 
 def load_model(model: ConstrainedModule, model_file_name: str) -> ConstrainedModule:
 
@@ -124,7 +129,9 @@ def load_model(model: ConstrainedModule, model_file_name: str) -> ConstrainedMod
     return model
 
 
-def retrieve_model_class(model_class_string: str) -> Type[base.DynamicIdentificationModel]:
+def retrieve_model_class(
+    model_class_string: str,
+) -> Type[base.DynamicIdentificationModel]:
     # https://stackoverflow.com/a/452981
     parts = model_class_string.split(".")
     module_string = ".".join(parts[:-1])
@@ -139,14 +146,37 @@ def retrieve_model_class(model_class_string: str) -> Type[base.DynamicIdentifica
         raise ValueError(f"{cls} is not a subclass of DynamicIdentificationModel")
     return cls  # type: ignore
 
-def init_layer_params(nx, nd,nw, n_out, key) -> Array:
-    x_key, d_key, w_key = random.split(key, 3)
-    return (random.normal(x_key, (n_out,nx)), random.normal(d_key, (n_out,nd)), random.normal(w_key, (n_out,nw)))
 
-def init_network_params(n_outs: List[int], key: Array, nx: int, nd: int, nw:int) -> List[Array]:
+def init_layer_params(nx, nd, nw, n_out, key) -> Array:
+    x_key, d_key, w_key = random.split(key, 3)
+    return (
+        random.normal(x_key, (n_out, nx)),
+        random.normal(d_key, (n_out, nd)),
+        random.normal(w_key, (n_out, nw)),
+    )
+
+
+def init_network_params(
+    n_outs: List[int], key: Array, nx: int, nd: int, nw: int
+) -> List[Array]:
     keys = random.split(key, len(n_outs))
-    return [init_layer_params(nx,nd,nw,n_out, key) for n_out, key in zip(n_outs, keys)]
+    return [
+        init_layer_params(nx, nd, nw, n_out, key) for n_out, key in zip(n_outs, keys)
+    ]
+
 
 @jit
-def update(theta:ArrayLike,f:Callable[[ArrayLike], Array],df:Callable[[ArrayLike], Array], d:ArrayLike, e:ArrayLike, s=0.01)-> List[Array]:
-    return [(x_param - s* d_x_param, d_param - s*d_d_parm, w_param - s*d_w_param) for (x_param, d_param, w_param), (d_x_param, d_d_parm, d_w_param) in zip(theta, df(theta, d, e))]
+def update(
+    theta: ArrayLike,
+    f: Callable[[ArrayLike], Array],
+    df: Callable[[ArrayLike], Array],
+    d: ArrayLike,
+    e: ArrayLike,
+    s=0.01,
+) -> List[Array]:
+    return [
+        (x_param - s * d_x_param, d_param - s * d_d_parm, w_param - s * d_w_param)
+        for (x_param, d_param, w_param), (d_x_param, d_d_parm, d_w_param) in zip(
+            theta, df(theta, d, e)
+        )
+    ]

@@ -15,7 +15,7 @@ def get_model_from_config(
     predictor: Optional[base.DynamicIdentificationModel] = None
     initializer: Optional[base.DynamicIdentificationModel] = None
 
-    if 'jax' in model_config.m_class:
+    if "jax" in model_config.m_class:
         model_class = base_jax.retrieve_model_class(model_config.m_class)
     else:
         model_class = base.retrieve_model_class(model_config.m_class)
@@ -33,13 +33,20 @@ def get_model_from_config(
     return (initializer, predictor)
 
 
-def load_model(experiment_config: BaseExperimentConfig, initializer:base.DynamicIdentificationModel, predictor:base.DynamicIdentificationModel, model_name: str, result_directory:str) -> List[base.DynamicIdentificationModel]:
+def load_model(
+    experiment_config: BaseExperimentConfig,
+    initializer: base.DynamicIdentificationModel,
+    predictor: base.DynamicIdentificationModel,
+    model_name: str,
+    result_directory: str,
+) -> List[base.DynamicIdentificationModel]:
     if isinstance(predictor, base_jax.ConstrainedModule):
         if experiment_config.initial_hidden_state == "zero":
             initializer, predictor = None, base_jax.load_model(
                 predictor,
                 os.path.join(
-                    result_directory, f'{utils.get_model_file_name("predictor", model_name)}.npz'
+                    result_directory,
+                    f'{utils.get_model_file_name("predictor", model_name)}.npz',
                 ),
             )
         else:
@@ -47,7 +54,8 @@ def load_model(experiment_config: BaseExperimentConfig, initializer:base.Dynamic
                 base_jax.load_model(
                     model,
                     os.path.join(
-                        result_directory, f'{utils.get_model_file_name(name, model_name)}.npz'
+                        result_directory,
+                        f"{utils.get_model_file_name(name, model_name)}.npz",
                     ),
                 )
                 for model, name in zip(
@@ -61,7 +69,8 @@ def load_model(experiment_config: BaseExperimentConfig, initializer:base.Dynamic
             initializer, predictor = None, base.load_model(
                 predictor,
                 os.path.join(
-                    result_directory, f'{utils.get_model_file_name("predictor", model_name)}.pth'
+                    result_directory,
+                    f'{utils.get_model_file_name("predictor", model_name)}.pth',
                 ),
             )
         else:
@@ -69,7 +78,8 @@ def load_model(experiment_config: BaseExperimentConfig, initializer:base.Dynamic
                 base.load_model(
                     model,
                     os.path.join(
-                        result_directory, f'{utils.get_model_file_name(name, model_name)}.pth'
+                        result_directory,
+                        f"{utils.get_model_file_name(name, model_name)}.pth",
                     ),
                 )
                 for model, name in zip(

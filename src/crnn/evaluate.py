@@ -71,7 +71,9 @@ def evaluate(
 
     initializer, predictor = get_model_from_config(model_config)
 
-    initializer, predictor = load_model(experiment_config,initializer,predictor,model_name, result_directory)
+    initializer, predictor = load_model(
+        experiment_config, initializer, predictor, model_name, result_directory
+    )
 
     metrics = dict()
     for name, metric_config in metrics_config.items():
@@ -122,17 +124,21 @@ def evaluate_model(
 
     es, e_hats, ds = [], [], []
     for _, sample in enumerate(test_dataset):
-        if hasattr(predictor, 'theta'):
+        if hasattr(predictor, "theta"):
             theta = predictor.theta
         else:
             theta = None
-        if initializer is not None and isinstance(initializer, base_torch.DynamicIdentificationModel):
+        if initializer is not None and isinstance(
+            initializer, base_torch.DynamicIdentificationModel
+        ):
             _, h0 = initializer.forward(
                 torch.unsqueeze(torch.tensor(sample["d_init"]), 0)
             )
         else:
             h0 = None
-        e_hat, _ = predictor.forward(torch.unsqueeze(torch.tensor(sample["d"]), 0), h0, theta)
+        e_hat, _ = predictor.forward(
+            torch.unsqueeze(torch.tensor(sample["d"]), 0), h0, theta
+        )
         e_hats.append(torch.squeeze(e_hat, 0).cpu().detach().numpy())
         es.append(sample["e"])
         ds.append(sample["d"])

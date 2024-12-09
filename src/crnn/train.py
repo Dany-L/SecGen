@@ -115,9 +115,7 @@ def train(
         )
 
         initializer, predictor = get_model_from_config(model_config)
-        optimizers = get_optimizer(
-            experiment_config, (initializer, predictor)
-        )
+        optimizers = get_optimizer(experiment_config, (initializer, predictor))
         schedulers = get_scheduler(optimizers)
 
         loss_fcn = get_loss_function(experiment_config.loss_function)
@@ -200,17 +198,21 @@ def train_joint(
         for step, batch in enumerate(train_loader):
             if isinstance(predictor, base_jax.ConstrainedModule):
                 # only for compatibility, same behavior as zero initialization
-                d, e = batch["d"].cpu().detach().numpy(), batch["e"].cpu().detach().numpy()
+                d, e = (
+                    batch["d"].cpu().detach().numpy(),
+                    batch["e"].cpu().detach().numpy(),
+                )
                 theta = predictor.theta
+
                 def f(theta, d, e, x0=None):
-                    e_hat, _ = predictor.forward(d,x0,theta)
-                    return jnp.mean((e_hat - e)**2)
-                
+                    e_hat, _ = predictor.forward(d, x0, theta)
+                    return jnp.mean((e_hat - e) ** 2)
+
                 df = grad(f)
-                theta = base_jax.update(theta, f, df, d,e)
+                theta = base_jax.update(theta, f, df, d, e)
                 predictor.theta = theta
-                e_hat = torch.from_dlpack(predictor.forward(d,None,theta)[0])
-                batch_loss = torch.from_dlpack(f(theta, d,e))
+                e_hat = torch.from_dlpack(predictor.forward(d, None, theta)[0])
+                batch_loss = torch.from_dlpack(f(theta, d, e))
                 batch_phi = torch.tensor([0.0])
             else:
                 predictor.zero_grad()
@@ -300,23 +302,26 @@ def train_zero(
     s = 0.01
     for epoch in range(exp_config.epochs):
         loss, phi = 0.0, 0.0  # phi is barrier
-        
+
         for step, batch in enumerate(train_loader):
             # predictor.zero_grad()
             if exp_config.ensure_constrained_method == "armijo":
                 if isinstance(predictor, base_jax.ConstrainedModule):
-                    d, e = batch["d"].cpu().detach().numpy(), batch["e"].cpu().detach().numpy()
+                    d, e = (
+                        batch["d"].cpu().detach().numpy(),
+                        batch["e"].cpu().detach().numpy(),
+                    )
                     theta = predictor.theta
-                    def f(theta, d, e, x0=None):
-                        e_hat, _ = predictor.forward(d,x0,theta)
-                        return jnp.mean((e_hat - e)**2)
-                    
-                    df = grad(f)
-                    theta = base_jax.update(theta, f, df, d,e)
-                    predictor.theta = theta
-                    batch_loss = torch.from_dlpack(f(theta, d,e))
-                    batch_phi = torch.tensor([0.0])
 
+                    def f(theta, d, e, x0=None):
+                        e_hat, _ = predictor.forward(d, x0, theta)
+                        return jnp.mean((e_hat - e) ** 2)
+
+                    df = grad(f)
+                    theta = base_jax.update(theta, f, df, d, e)
+                    predictor.theta = theta
+                    batch_loss = torch.from_dlpack(f(theta, d, e))
+                    batch_phi = torch.tensor([0.0])
 
                 elif isinstance(predictor, base_torch.DynamicIdentificationModel):
                     opt_fcn = base_torch.OptFcn(
@@ -345,12 +350,16 @@ def train_zero(
                     new_theta = old_theta + s * dir
                     opt_fcn.set_vec_pars_to_model(new_theta)
 
-                    tracker.track(ev.TrackMetrics("", {
-                            "loss.step": float(batch_loss),
-                            "stepsize.step": float(s),
-                        },
-                        epoch * len(train_loader) + step
-                    ))
+                    tracker.track(
+                        ev.TrackMetrics(
+                            "",
+                            {
+                                "loss.step": float(batch_loss),
+                                "stepsize.step": float(s),
+                            },
+                            epoch * len(train_loader) + step,
+                        )
+                    )
 
             else:
                 e_hat, _ = predictor.forward(batch["d"])
@@ -450,17 +459,21 @@ def train_separate(
         for step, batch in enumerate(pred_loader):
             if isinstance(predictor, base_jax.ConstrainedModule):
                 # only for compatibility, same behavior as zero initialization
-                d, e = batch["d"].cpu().detach().numpy(), batch["e"].cpu().detach().numpy()
+                d, e = (
+                    batch["d"].cpu().detach().numpy(),
+                    batch["e"].cpu().detach().numpy(),
+                )
                 theta = predictor.theta
+
                 def f(theta, d, e, x0=None):
-                    e_hat, _ = predictor.forward(d,x0,theta)
-                    return jnp.mean((e_hat - e)**2)
-                
+                    e_hat, _ = predictor.forward(d, x0, theta)
+                    return jnp.mean((e_hat - e) ** 2)
+
                 df = grad(f)
-                theta = base_jax.update(theta, f, df, d,e)
+                theta = base_jax.update(theta, f, df, d, e)
                 predictor.theta = theta
-                e_hat = torch.from_dlpack(predictor.forward(d,None,theta)[0])
-                batch_loss = torch.from_dlpack(f(theta, d,e))
+                e_hat = torch.from_dlpack(predictor.forward(d, None, theta)[0])
+                batch_loss = torch.from_dlpack(f(theta, d, e))
                 batch_phi = torch.tensor([0.0])
             else:
                 predictor.zero_grad()

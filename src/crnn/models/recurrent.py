@@ -4,6 +4,7 @@ import torch
 import torch.nn as nn
 
 from .base_torch import DynamicIdentificationModel, DynamicIdentificationConfig
+
 # from base_torch import DynamicIdentificationConfig, DynamicIdentificationModel
 # from .base_torch import DynamicIdentificationConfig, DynamicIdentificationModel
 
@@ -41,7 +42,7 @@ class BasicRnn(DynamicIdentificationModel):
         x0: Optional[
             Union[Tuple[torch.Tensor, torch.Tensor], Tuple[torch.Tensor]]
         ] = None,
-        theta: Optional[List] = None
+        theta: Optional[List] = None,
     ) -> Tuple[
         torch.Tensor,
         Union[Tuple[torch.Tensor, torch.Tensor], Tuple[torch.Tensor]],
@@ -103,7 +104,7 @@ class BasicLstm(DynamicIdentificationModel):
         x0: Optional[
             Union[Tuple[torch.Tensor, torch.Tensor], Tuple[torch.Tensor]]
         ] = None,
-        theta: Optional[List] = None
+        theta: Optional[List] = None,
     ) -> Tuple[
         torch.Tensor,
         Union[Tuple[torch.Tensor, torch.Tensor], Tuple[torch.Tensor]],

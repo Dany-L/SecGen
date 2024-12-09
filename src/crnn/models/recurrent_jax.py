@@ -20,10 +20,13 @@ class BasicLtiRnn(base_jax.ConstrainedModule):
         super().__init__(config)
         key = random.key(0)
         n_outs = [self.nx, self.ne, self.nz]
-        self.theta = base_jax.init_network_params(n_outs, key,self.nx, self.nd, self.nw)
+        self.theta = base_jax.init_network_params(
+            n_outs, key, self.nx, self.nd, self.nw
+        )
 
-
-    def forward_unbatched(self, d: ArrayLike,x0: ArrayLike, theta:ArrayLike) -> Tuple[Array, Array]:
+    def forward_unbatched(
+        self, d: ArrayLike, x0: ArrayLike, theta: ArrayLike
+    ) -> Tuple[Array, Array]:
         N, nu = d.shape  # number of batches, length of sequence, input size
         if x0 is None:
             x0 = jnp.zeros((self.nx,))
@@ -33,7 +36,6 @@ class BasicLtiRnn(base_jax.ConstrainedModule):
         e_hat = jnp.zeros((N, self.ne, 1))
         x_k = x0.reshape(self.nx, 1)
 
-        
         for k in range(N):
             d_k = ds[k, :, :]
             for x_param, d_param, _ in theta[2:]:
@@ -42,12 +44,13 @@ class BasicLtiRnn(base_jax.ConstrainedModule):
             x_k = theta[0][0] @ x_k + theta[0][1] @ d_k + theta[0][2] @ w_k
             e_hat_k = theta[1][0] @ x_k + theta[1][1] @ d_k + theta[1][2] @ w_k
 
-            e_hat = e_hat.at[k,:,:].set(e_hat_k)
-            
-    
-        return (e_hat.reshape(N,self.ne), x_k)
+            e_hat = e_hat.at[k, :, :].set(e_hat_k)
 
-    def forward(self, d: torch.Tensor,x0: torch.Tensor, theta:List) -> Tuple[torch.Tensor, torch.Tensor]:
+        return (e_hat.reshape(N, self.ne), x_k)
+
+    def forward(
+        self, d: torch.Tensor, x0: torch.Tensor, theta: List
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         if isinstance(d, torch.Tensor):
             return_torch = True
             d = d.cpu().detach().numpy()
@@ -63,7 +66,6 @@ class BasicLtiRnn(base_jax.ConstrainedModule):
         else:
             return (e_hat, x)
 
-
     def check_constraints(self) -> bool:
         return True
 
@@ -76,7 +78,5 @@ class BasicLtiRnn(base_jax.ConstrainedModule):
     def project_parameters(self) -> None:
         pass
 
-    def train(self) ->None:
+    def train(self) -> None:
         pass
-
-

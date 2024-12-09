@@ -8,6 +8,7 @@ from ..additional_tests import AdditionalTestConfig, retrieve_additional_test_cl
 from ..metrics import MetricConfig, retrieve_metric_class
 from ..models import base
 from ..models import base_jax
+
 # from ..models.base import DynamicIdentificationConfig, retrieve_model_class
 # from ..models.base_jax import DynamicIdentificationConfig, retrieve_model_class
 from ..tracker.base import BaseTrackerConfig, retrieve_tracker_class
@@ -139,7 +140,7 @@ class ExperimentConfig(BaseModel):
             experiments[experiment_base_name] = experiment_config
 
             for model in template.models:
-                if 'jax' in model.m_class:
+                if "jax" in model.m_class:
                     model_class = base_jax.retrieve_model_class(model.m_class)
                     models[f"{experiment_base_name}-{model.m_short_name}"] = (
                         BaseModelConfig(

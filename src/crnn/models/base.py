@@ -98,7 +98,7 @@ class DynamicIdentificationModel(ABC):
         x0: Optional[
             Union[Tuple[torch.Tensor, torch.Tensor], Tuple[torch.Tensor]]
         ] = None,
-        theta: Optional[List] = None
+        theta: Optional[List] = None,
     ) -> Tuple[
         torch.Tensor,
         Union[Tuple[torch.Tensor, torch.Tensor], Tuple[torch.Tensor]],
@@ -117,6 +117,7 @@ class DynamicIdentificationModel(ABC):
 
     def get_number_of_parameters(self) -> int:
         return -1
+
 
 class Linear(nn.Module):
     def __init__(
@@ -195,7 +196,9 @@ class LureSystem(Linear):
             return y
 
 
-def load_model(model: DynamicIdentificationModel, model_file_name: str) -> DynamicIdentificationModel:
+def load_model(
+    model: DynamicIdentificationModel, model_file_name: str
+) -> DynamicIdentificationModel:
     model.load_state_dict(
         torch.load(model_file_name, map_location=torch.device("cpu"), weights_only=True)
     )
@@ -217,5 +220,3 @@ def retrieve_model_class(model_class_string: str) -> Type[DynamicIdentificationM
     if not issubclass(cls, DynamicIdentificationModel):
         raise ValueError(f"{cls} is not a subclass of DynamicIdentificationModel")
     return cls  # type: ignore
-
-
