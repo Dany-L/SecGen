@@ -1,16 +1,15 @@
-from abc import ABC, abstractmethod
-from dataclasses import dataclass
-from typing import Callable, List, Literal, Optional, Tuple, Type, Union
+from typing import Callable, List, Literal, Optional, Tuple, Union
 
 import cvxpy as cp
 import numpy as np
 import torch
 import torch.nn as nn
 from numpy.typing import NDArray
-from pydantic import BaseModel
-from . import base
+from jax import Array
+from jax.typing import ArrayLike
 
-from ..utils import transformation as trans
+from ...utils import transformation as trans
+from .. import base
 
 
 class DynamicIdentificationConfig(base.DynamicIdentificationConfig):
@@ -20,6 +19,12 @@ class DynamicIdentificationConfig(base.DynamicIdentificationConfig):
 class DynamicIdentificationModel(base.DynamicIdentificationModel, nn.Module):
     def get_number_of_parameters(self):
         return sum(p.numel() for p in self.parameters() if p.requires_grad)
+
+    def pointwise_constraints(self) -> List[Callable]:
+        return [lambda: 1]
+
+    def sdp_constraints(self) -> List[Callable]:
+        return [lambda: np.eye(self.nz)]
 
 
 class ConstrainedModuleConfig(DynamicIdentificationConfig):
@@ -84,19 +89,13 @@ class ConstrainedModule(DynamicIdentificationModel):
         else:
             raise NotImplementedError(f"Unsupported multiplier: {self.multiplier}")
 
-    def add_semidefinite_constraints(self, constraints=List[Callable]) -> None:
-        pass
-
-    def add_pointwise_constraints(self, constraints=List[Callable]) -> None:
-        pass
-
     def forward(
         self,
         d: torch.Tensor,
         x0: Optional[
             Union[Tuple[torch.Tensor, torch.Tensor], Tuple[torch.Tensor]]
         ] = None,
-        theta: Optional[List] = None,
+        theta: Optional[ArrayLike] = None,
     ) -> Tuple[
         torch.Tensor,
         Union[Tuple[torch.Tensor, torch.Tensor], Tuple[torch.Tensor]],
@@ -108,7 +107,7 @@ class ConstrainedModule(DynamicIdentificationModel):
         else:
             x0 = x0[0]
         ds = d.reshape(shape=(B, N, nu, 1))
-        es_hat, x = self.lure.forward(x0=x0, us=ds, return_states=True)
+        es_hat, x = self.lure.forward(x0=x0, d=ds)
         return (
             es_hat.reshape(B, N, self.lure._ny),
             (x.reshape(B, self.nx),),
@@ -127,7 +126,7 @@ class ConstrainedModule(DynamicIdentificationModel):
                     return False
         return True
 
-    def get_phi(self, t: float) -> torch.Tensor:
+    def get_phi(self, t: float, theta: Optional[ArrayLike] = None) -> Union[torch.Tensor, Array]:
         if self.sdp_constraints() is not None:
             batch_phi = (
                 1
@@ -283,21 +282,21 @@ class OptFcn:
         nn: ConstrainedModule,
         t=float,
         x0: torch.Tensor = None,
-        l: torch.nn.Module = torch.nn.MSELoss(),
+        loss: torch.nn.Module = torch.nn.MSELoss(),
     ) -> None:
         self.d = d
         self.x0 = x0
         self.e = e
         self.nn = nn
-        self.l = l
+        self.loss = loss
         self.t = torch.tensor(t)
 
     def f(self, theta: torch.Tensor) -> torch.Tensor:
         self.set_vec_pars_to_model(theta)
         self.nn.set_lure_system()
-        l = self.l(self.nn(self.d, self.x0)[0], self.e)
+        loss = self.loss(self.nn(self.d, self.x0)[0], self.e)
         phi = self.nn.get_phi(self.t)
-        return l + phi
+        return loss + phi
 
     def dF(self, theta: torch.Tensor) -> torch.Tensor:
         self.nn.zero_grad()
@@ -318,3 +317,13 @@ class OptFcn:
             num_par = p.numel()
             p.data = theta[start_flat : start_flat + num_par].view(p.shape)
             start_flat += num_par
+
+
+def load_model(
+    model: DynamicIdentificationModel, model_file_name: str
+) -> DynamicIdentificationModel:
+    model.load_state_dict(
+        torch.load(model_file_name, map_location=torch.device("cpu"), weights_only=True)
+    )
+    model.set_lure_system()
+    return model

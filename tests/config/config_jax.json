@@ -76,65 +76,19 @@
     },
     "models": [
         {
+            "m_short_name" : "ltiRnnJax",
+            "m_class": "crnn.models.jax.recurrent.BasicLtiRnn",
+            "parameters": {
+                "nonlinearity": "tanh",
+                "multiplier": "diag"
+            }
+        },
+        {
             "m_short_name" : "tanhJax",
-            "m_class": "crnn.models.recurrent_jax.BasicLtiRnn",
+            "m_class": "crnn.models.jax.constrained.ConstrainedLtiRnn",
             "parameters": {
                 "nonlinearity": "tanh",
                 "multiplier": "diag"
-            }
-        },
-        {
-            "m_short_name": "ltiRnn",
-            "m_class": "crnn.models.sector_bounded.BasicLtiRnn",
-            "parameters": {
-                "nonlinearity": "tanh"
-            }
-        },
-        {
-            "m_short_name": "lstm",
-            "m_class": "crnn.models.recurrent.BasicLstm",
-            "parameters": {
-                "dropout": 0.25,
-                "num_layers": 2
-            }
-        },
-        {
-            "m_short_name" : "rnn",
-            "m_class": "crnn.models.recurrent.BasicRnn",
-            "parameters": {
-                "num_layers": 2,
-                "nonlinearity": "tanh"
-            }
-        },
-        {
-            "m_short_name" : "tanh",
-            "m_class": "crnn.models.sector_bounded.SectorBoundedLtiRnn",
-            "parameters": {
-                "nonlinearity": "tanh",
-                "multiplier": "none"
-            }
-        },
-        {
-            "m_short_name" : "l2-tanh",
-            "m_class": "crnn.models.l2.L2Stable",
-            "parameters": {
-                "nonlinearity": "tanh",
-                "multiplier": "diag"
-            }
-        },
-        {
-            "m_short_name" : "dzn",
-            "m_class": "crnn.models.sector_bounded.SectorBoundedLtiRnn",
-            "parameters": {
-                "nonlinearity": "deadzone",
-                "multiplier": "none"
-            }
-        },
-        {
-            "m_short_name" : "dznGen",
-            "m_class": "crnn.models.sector_bounded.GeneralSectorBoundedLtiRnn",
-            "parameters": {
-                "nonlinearity": "deadzone"
             }
         }
     ]

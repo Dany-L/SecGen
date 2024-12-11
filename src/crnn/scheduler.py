@@ -1,12 +1,8 @@
-from typing import Iterable, List, Tuple
+from typing import List, Tuple
 
-import torch
-import torch.optim as opt
-
-from .configuration.experiment import BaseExperimentConfig
-from .models import base
-from .models import base_jax
 from torch.optim import lr_scheduler
+
+from .models import base
 
 
 def get_scheduler(

@@ -4,13 +4,12 @@ import cvxpy as cp
 import numpy as np
 import torch
 
-from ..utils import base as utils
-from ..utils import transformation as trans
-from . import base
-from . import base_torch
+from ...utils import base as utils
+from ...utils import transformation as trans
+from . import base as base_torch
 
 
-class SectorBoundedLtiRnn(base_torch.StableConstrainedModule):
+class ConstrainedLtiRnn(base_torch.StableConstrainedModule):
     CONFIG = base_torch.ConstrainedModuleConfig
 
     def __init__(self, config: base_torch.ConstrainedModuleConfig) -> None:
@@ -104,7 +103,7 @@ class SectorBoundedLtiRnn(base_torch.StableConstrainedModule):
         return problem.status
 
 
-class GeneralSectorBoundedLtiRnn(base_torch.StableConstrainedModule):
+class ConstrainedLtiRnnGeneralSectorConditions(base_torch.StableConstrainedModule):
     CONFIG = base_torch.ConstrainedModuleConfig
 
     def __init__(self, config: base_torch.ConstrainedModuleConfig) -> None:
@@ -221,64 +220,3 @@ class GeneralSectorBoundedLtiRnn(base_torch.StableConstrainedModule):
         self.set_L(torch.tensor(utils.get_opt_values(L)))
 
         return problem.status
-
-
-class BasicLtiRnn(base_torch.ConstrainedModule):
-    CONFIG = base_torch.ConstrainedModuleConfig
-
-    def __init__(self, config: base_torch.ConstrainedModuleConfig) -> None:
-        super().__init__(config)
-        self.nonlinearity = config.nonlinearity
-
-        mean = 0.0
-        self.A = torch.zeros((self.nx, self.nx))
-        self.B = torch.zeros((self.nx, self.nd))
-        self.B2 = torch.eye(self.nw)
-
-        self.C = torch.zeros((self.ne, self.nx))
-        self.D = torch.zeros((self.ne, self.nd))
-
-        self.D12 = torch.nn.Parameter(
-            torch.normal(
-                mean * torch.ones((self.ne, self.nw)),
-                1 / self.ne * torch.ones((self.ne, self.nw)),
-            )
-        )
-        self.C2 = torch.nn.Parameter(
-            torch.normal(
-                mean * torch.ones((self.nz, self.nx)),
-                1 / self.nz * torch.ones((self.nz, self.nx)),
-            )
-        )
-        self.D21 = torch.nn.Parameter(
-            torch.normal(
-                mean * torch.ones((self.nz, self.nd)),
-                1 / self.nz * torch.ones((self.nz, self.nd)),
-            )
-        )
-        self.D22 = torch.zeros((self.nz, self.nw))
-
-    def set_lure_system(self) -> base.LureSystemClass:
-        theta = trans.torch_bmat(
-            [
-                [self.A, self.B, self.B2],
-                [self.C, self.D, self.D12],
-                [self.C2, self.D21, self.D22],
-            ]
-        )
-        sys = base.get_lure_matrices(theta, self.nx, self.nd, self.ne, self.nl)
-        self.lure = base.LureSystem(sys)
-
-        return sys
-
-    def check_constraints(self) -> bool:
-        return True
-
-    def sdp_constraints(self) -> List[Callable]:
-        pass
-
-    def initialize_parameters(self) -> None:
-        pass
-
-    def project_parameters(self) -> None:
-        pass

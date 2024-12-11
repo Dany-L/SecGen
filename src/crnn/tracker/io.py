@@ -1,6 +1,5 @@
 import json
 import os
-import time
 from datetime import datetime
 
 from ..configuration.base import FIG_FOLDER_NAME, SEQ_FOLDER_NAME
@@ -13,10 +12,10 @@ from ..data_io import (
 from ..utils import base as utils
 from ..utils import plot
 from . import events as ev
-from .base import BaseTracker, BaseTrackerConfig, Event
+from .base import BaseTracker, TrackerConfig, Event
 
 
-class IoTrackerConfig(BaseTrackerConfig):
+class IoTrackerConfig(TrackerConfig):
     pass
 
 
@@ -52,7 +51,7 @@ class IoTracker(BaseTracker):
         elif isinstance(event, ev.Start):
             self.write_to_logfile(f"--- Start model {self.model_name} ---")
         elif isinstance(event, ev.Stop):
-            self.write_to_logfile(f"--- Stop ---")
+            self.write_to_logfile("--- Stop ---")
         elif isinstance(event, ev.SaveModel):
             save_model(
                 event.model,

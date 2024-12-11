@@ -1,10 +1,10 @@
 from typing import List
 
+import jax.numpy as jnp
 import numpy as np
 import torch
 from jax import Array
 from jax.typing import ArrayLike
-import jax.numpy as jnp
 from numpy.typing import NDArray
 
 

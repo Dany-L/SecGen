@@ -1,12 +1,12 @@
-from typing import Optional, Tuple, List
-
-from ..configuration.experiment import BaseModelConfig, BaseExperimentConfig
-from . import base as base
-from . import base_jax as base_jax
-from ..utils import base as utils
 import os
+from typing import List, Optional, Tuple
 
-from .recurrent import BasicLstm
+from ..configuration.experiment import BaseExperimentConfig, BaseModelConfig
+from ..utils import base as utils
+from . import base as base
+from .jax import base as base_jax
+from .torch import base as base_torch
+from .torch.recurrent import BasicLstm
 
 
 def get_model_from_config(
@@ -15,10 +15,10 @@ def get_model_from_config(
     predictor: Optional[base.DynamicIdentificationModel] = None
     initializer: Optional[base.DynamicIdentificationModel] = None
 
-    if "jax" in model_config.m_class:
-        model_class = base_jax.retrieve_model_class(model_config.m_class)
-    else:
-        model_class = base.retrieve_model_class(model_config.m_class)
+    # if "jax" in model_config.m_class:
+    #     model_class = base.retrieve_model_class(model_config.m_class)
+    # else:
+    model_class = base.retrieve_model_class(model_config.m_class)
 
     if isinstance(model_class, BasicLstm):
         # to approximately match size of other models, two hidden states h and c
@@ -66,7 +66,7 @@ def load_model(
         return [initializer, predictor]
     else:
         if experiment_config.initial_hidden_state == "zero":
-            initializer, predictor = None, base.load_model(
+            initializer, predictor = None, base_torch.load_model(
                 predictor,
                 os.path.join(
                     result_directory,
@@ -75,7 +75,7 @@ def load_model(
             )
         else:
             initializer, predictor = (
-                base.load_model(
+                base_torch.load_model(
                     model,
                     os.path.join(
                         result_directory,

@@ -1,15 +1,13 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Callable, List, Literal, Optional, Tuple, Type, Union
+from typing import Callable, List, Optional, Tuple, Type, Union
 
-import cvxpy as cp
 import numpy as np
 import torch
 import torch.nn as nn
-from numpy.typing import NDArray
+from jax import Array
+from jax.typing import ArrayLike
 from pydantic import BaseModel
-
-from ..utils import transformation as trans
 
 
 @dataclass
@@ -32,28 +30,6 @@ class DynamicIdentificationConfig(BaseModel):
     nz: int
 
 
-def get_lure_matrices(
-    gen_plant: torch.Tensor,
-    nx: int,  # state
-    nd: int,  # input
-    ne: int,  # output
-    nonlinearity: Optional[torch.nn.Module] = torch.nn.Tanh(),
-) -> LureSystemClass:
-    A = gen_plant[:nx, :nx]
-    B = gen_plant[:nx, nx : nx + nd]
-    B2 = gen_plant[:nx, nx + nd :]
-
-    C = gen_plant[nx : nx + ne, :nx]
-    D = gen_plant[nx : nx + ne, nx : nx + nd]
-    D12 = gen_plant[nx : nx + ne, nx + nd :]
-
-    C2 = gen_plant[nx + ne :, :nx]
-    D21 = gen_plant[nx + ne :, nx : nx + nd]
-    D22 = gen_plant[nx + ne :, nx + nd :]
-
-    return LureSystemClass(A, B, B2, C, D, D12, C2, D21, D22, nonlinearity)
-
-
 class DynamicIdentificationModel(ABC):
 
     def __init__(self, config: DynamicIdentificationConfig) -> None:
@@ -64,19 +40,15 @@ class DynamicIdentificationModel(ABC):
         self.nd, self.ne = config.nd, config.ne  # size of input and output
 
     @abstractmethod
-    def add_semidefinite_constraints(self, constraints=List[Callable]) -> None:
-        pass
-
-    @abstractmethod
-    def add_pointwise_constraints(self, constraints=List[Callable]) -> None:
-        pass
-
-    @abstractmethod
     def initialize_parameters(self) -> str:
         pass
 
     @abstractmethod
     def sdp_constraints(self) -> List[Callable]:
+        pass
+
+    @abstractmethod
+    def pointwise_constraints(self) -> List[Callable]:
         pass
 
     def set_lure_system(self) -> LureSystemClass:
@@ -98,7 +70,7 @@ class DynamicIdentificationModel(ABC):
         x0: Optional[
             Union[Tuple[torch.Tensor, torch.Tensor], Tuple[torch.Tensor]]
         ] = None,
-        theta: Optional[List] = None,
+        theta: Optional[ArrayLike] = None,
     ) -> Tuple[
         torch.Tensor,
         Union[Tuple[torch.Tensor, torch.Tensor], Tuple[torch.Tensor]],
@@ -108,7 +80,7 @@ class DynamicIdentificationModel(ABC):
     def check_constraints(self) -> bool:
         return True
 
-    def get_phi(self, t: float) -> torch.Tensor:
+    def get_phi(self, t: float, theta: Optional[ArrayLike] = None) -> Union[torch.Tensor, Array]:
         return torch.tensor(0.0)
 
     @abstractmethod
@@ -146,20 +118,26 @@ class Linear(nn.Module):
         return self.C @ x + self.D @ u
 
     def forward(
-        self, x0: torch.Tensor, us: torch.Tensor, return_state: bool = False
-    ) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
-        n_batch, N, _, _ = us.shape
+        self,
+        d: torch.Tensor,
+        x0: Optional[
+            Union[Tuple[torch.Tensor, torch.Tensor], Tuple[torch.Tensor]]
+        ] = None,
+        theta: Optional[ArrayLike] = None,
+    ) -> Tuple[
+        torch.Tensor,
+        Union[Tuple[torch.Tensor, torch.Tensor], Tuple[torch.Tensor]],
+    ]:
+        n_batch, N, _, _ = d.shape
         x = torch.zeros(size=(n_batch, N + 1, self._nx, 1))
         y = torch.zeros(size=(n_batch, N, self._ny, 1))
         x[:, 0, :, :] = x0
 
         for k in range(N):
-            x[:, k + 1, :, :] = self.state_dynamics(x=x[:, k, :, :], u=us[:, k, :, :])
-            y[:, k, :, :] = self.output_dynamics(x=x[:, k, :, :], u=us[:, k, :, :])
-        if return_state:
-            return (y, x)
-        else:
-            return y
+            x[:, k + 1, :, :] = self.state_dynamics(x=x[:, k, :, :], u=d[:, k, :, :])
+            y[:, k, :, :] = self.output_dynamics(x=x[:, k, :, :], u=d[:, k, :, :])
+
+        return (y, x)
 
 
 class LureSystem(Linear):
@@ -178,32 +156,28 @@ class LureSystem(Linear):
         self.Delta = sys.Delta  # static nonlinearity
 
     def forward(
-        self, x0: torch.Tensor, us: torch.Tensor, return_states: bool = False
-    ) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
-        n_batch, N, _, _ = us.shape
+        self,
+        d: torch.Tensor,
+        x0: Optional[
+            Union[Tuple[torch.Tensor, torch.Tensor], Tuple[torch.Tensor]]
+        ] = None,
+        theta: Optional[ArrayLike] = None,
+    ) -> Tuple[
+        torch.Tensor,
+        Union[Tuple[torch.Tensor, torch.Tensor], Tuple[torch.Tensor]],
+    ]:
+        n_batch, N, _, _ = d.shape
         y = torch.zeros(size=(n_batch, N, self._ny, 1))
         x = x0.reshape(n_batch, self._nx, 1)
 
         for k in range(N):
-            w = self.Delta(self.C2 @ x + self.D21 @ us[:, k, :, :])
-            x = super().state_dynamics(x=x, u=us[:, k, :, :]) + self.B2 @ w
+            w = self.Delta(self.C2 @ x + self.D21 @ d[:, k, :, :])
+            x = super().state_dynamics(x=x, u=d[:, k, :, :]) + self.B2 @ w
             y[:, k, :, :] = (
-                super().output_dynamics(x=x, u=us[:, k, :, :]) + self.D12 @ w
+                super().output_dynamics(x=x, u=d[:, k, :, :]) + self.D12 @ w
             )
-        if return_states:
-            return (y, x)
-        else:
-            return y
 
-
-def load_model(
-    model: DynamicIdentificationModel, model_file_name: str
-) -> DynamicIdentificationModel:
-    model.load_state_dict(
-        torch.load(model_file_name, map_location=torch.device("cpu"), weights_only=True)
-    )
-    model.set_lure_system()
-    return model
+        return (y, x)
 
 
 def retrieve_model_class(model_class_string: str) -> Type[DynamicIdentificationModel]:
@@ -220,3 +194,25 @@ def retrieve_model_class(model_class_string: str) -> Type[DynamicIdentificationM
     if not issubclass(cls, DynamicIdentificationModel):
         raise ValueError(f"{cls} is not a subclass of DynamicIdentificationModel")
     return cls  # type: ignore
+
+
+def get_lure_matrices(
+    gen_plant: torch.Tensor,
+    nx: int,  # state
+    nd: int,  # input
+    ne: int,  # output
+    nonlinearity: Optional[torch.nn.Module] = torch.nn.Tanh(),
+) -> LureSystemClass:
+    A = gen_plant[:nx, :nx]
+    B = gen_plant[:nx, nx : nx + nd]
+    B2 = gen_plant[:nx, nx + nd :]
+
+    C = gen_plant[nx : nx + ne, :nx]
+    D = gen_plant[nx : nx + ne, nx : nx + nd]
+    D12 = gen_plant[nx : nx + ne, nx + nd :]
+
+    C2 = gen_plant[nx + ne :, :nx]
+    D21 = gen_plant[nx + ne :, nx : nx + nd]
+    D22 = gen_plant[nx + ne :, nx + nd :]
+
+    return LureSystemClass(A, B, B2, C, D, D12, C2, D21, D22, nonlinearity)

@@ -1,17 +1,13 @@
 import itertools
 import json
-from typing import Any, Dict, List, Literal, Union
+from typing import Any, Dict, List, Literal
 
 from pydantic import BaseModel
 
 from ..additional_tests import AdditionalTestConfig, retrieve_additional_test_class
 from ..metrics import MetricConfig, retrieve_metric_class
 from ..models import base
-from ..models import base_jax
-
-# from ..models.base import DynamicIdentificationConfig, retrieve_model_class
-# from ..models.base_jax import DynamicIdentificationConfig, retrieve_model_class
-from ..tracker.base import BaseTrackerConfig, retrieve_tracker_class
+from ..tracker.base import TrackerConfig, retrieve_tracker_class
 
 
 class ExperimentAdditionalTest(BaseModel):
@@ -42,7 +38,7 @@ class BaseAdditionalTestConfig(BaseModel):
 
 class BaseTrackerConfig(BaseModel):
     tracker_class: str
-    parameters: BaseTrackerConfig
+    parameters: TrackerConfig
 
 
 class BaseMetricConfig(BaseModel):
@@ -140,38 +136,38 @@ class ExperimentConfig(BaseModel):
             experiments[experiment_base_name] = experiment_config
 
             for model in template.models:
-                if "jax" in model.m_class:
-                    model_class = base_jax.retrieve_model_class(model.m_class)
-                    models[f"{experiment_base_name}-{model.m_short_name}"] = (
-                        BaseModelConfig(
-                            m_class=model.m_class,
-                            parameters=model_class.CONFIG(
-                                **{
-                                    **model.parameters,
-                                    **static_experiment_params,
-                                    **flexible_experiment_params,
-                                    "nd": nd,
-                                    "ne": ne,
-                                }
-                            ),
-                        )
+                # if "jax" in model.m_class:
+                model_class = base.retrieve_model_class(model.m_class)
+                models[f"{experiment_base_name}-{model.m_short_name}"] = (
+                    BaseModelConfig(
+                        m_class=model.m_class,
+                        parameters=model_class.CONFIG(
+                            **{
+                                **model.parameters,
+                                **static_experiment_params,
+                                **flexible_experiment_params,
+                                "nd": nd,
+                                "ne": ne,
+                            }
+                        ),
                     )
-                else:
-                    model_class = base.retrieve_model_class(model.m_class)
-                    models[f"{experiment_base_name}-{model.m_short_name}"] = (
-                        BaseModelConfig(
-                            m_class=model.m_class,
-                            parameters=model_class.CONFIG(
-                                **{
-                                    **model.parameters,
-                                    **static_experiment_params,
-                                    **flexible_experiment_params,
-                                    "nd": nd,
-                                    "ne": ne,
-                                }
-                            ),
-                        )
-                    )
+                )
+                # else:
+                #     model_class = base.retrieve_model_class(model.m_class)
+                #     models[f"{experiment_base_name}-{model.m_short_name}"] = (
+                #         BaseModelConfig(
+                #             m_class=model.m_class,
+                #             parameters=model_class.CONFIG(
+                #                 **{
+                #                     **model.parameters,
+                #                     **static_experiment_params,
+                #                     **flexible_experiment_params,
+                #                     "nd": nd,
+                #                     "ne": ne,
+                #                 }
+                #             ),
+                #         )
+                #     )
 
         model_names = []
         for model in template.models:

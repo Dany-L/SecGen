@@ -2,10 +2,10 @@ import json
 import os
 from typing import Any, Dict, List, Literal, Tuple
 
+import jax.numpy as jnp
 import numpy as np
 import pandas as pd
 import torch
-import jax.numpy as jnp
 from numpy.typing import NDArray
 from scipy.io import loadmat, savemat
 
@@ -16,8 +16,9 @@ from .configuration.base import (
     NormalizationParameters,
 )
 from .models import base as base
-from .models import base_jax as base_jax
-from .models import base_torch as base_torch
+from .models.jax import base as base_jax
+from .models.jax.recurrent import get_matrices_from_flat_theta
+from .models.torch import base as base_torch
 
 
 def load_data(
@@ -109,8 +110,9 @@ def save_model(
     if isinstance(model, base_jax.ConstrainedModule):
         par_dict = {
             n: p
-            for names, parameters in zip(model.parameter_names, model.theta)
-            for n, p in zip(names, parameters)
+            for n, p in zip(
+                model.parameter_names, get_matrices_from_flat_theta(model, model.theta)
+            )
         }
         jnp.savez(file_path, **par_dict)
     elif isinstance(model, base_torch.DynamicIdentificationModel):
@@ -121,11 +123,7 @@ def save_model_parameter(
     model: base.DynamicIdentificationModel, file_name: str
 ) -> None:
     if isinstance(model, base_jax.ConstrainedModule):
-        par_dict = {
-            n: np.array(p)
-            for names, parameters in zip(model.parameter_names, model.theta)
-            for n, p in zip(names, parameters)
-        }
+        par_dict = {n: np.array(p) for n, p in zip(model.parameter_names, model.theta)}
         savemat(file_name, par_dict)
     elif isinstance(model, base_torch.DynamicIdentificationModel):
         par_dict = {}

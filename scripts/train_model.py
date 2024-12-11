@@ -4,7 +4,7 @@ import os
 import torch
 
 import crnn.configuration.base as cfg
-from crnn.train import train
+from crnn.train.base import train
 
 torch.set_default_dtype(torch.double)
 

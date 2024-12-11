@@ -1,17 +1,16 @@
 from abc import abstractmethod
 from dataclasses import dataclass
-from typing import Dict, List, Literal, Tuple, Type, Union, Optional
+from typing import Dict, List, Literal, Optional, Tuple, Type, Union
 
 import numpy as np
 import torch
 from pydantic import BaseModel
 
 from .configuration.base import InputOutput
-from .models.base_torch import ConstrainedModule
-from .models.recurrent import BasicLstm, BasicRnn
+from .models.torch import base as base_torch
+from .models.torch import recurrent as recurrent_torch
 from .tracker import events as ev
 from .tracker.base import AggregatedTracker
-from .utils.plot import plot_sequence
 
 
 class AdditionalTestConfig(BaseModel):
@@ -35,7 +34,7 @@ class AdditionalTest:
     def __init__(
         self,
         config: AdditionalTestConfig,
-        model: ConstrainedModule,
+        model: base_torch.ConstrainedModule,
         tracker: AggregatedTracker = AggregatedTracker(),
     ):
         self.epochs = config.epochs
@@ -158,14 +157,14 @@ class InputOutputStabilityL2(AdditionalTest):
 
 
 def get_x0(
-    model: ConstrainedModule, B: int
+    model: base_torch.ConstrainedModule, B: int
 ) -> Union[Tuple[torch.Tensor], Tuple[torch.Tensor, torch.Tensor]]:
-    if isinstance(model, BasicLstm):
+    if isinstance(model, recurrent_torch.BasicLstm):
         x0 = (
             torch.rand(model.num_layers, B, model.nx),
             torch.rand(model.num_layers, B, model.nx),
         )
-    elif isinstance(model, BasicRnn):
+    elif isinstance(model, recurrent_torch.BasicRnn):
         x0 = (torch.rand(model.num_layers, B, model.nx),)
     else:
         x0 = (torch.rand(B, model.nx),)
@@ -173,12 +172,12 @@ def get_x0(
 
 
 def get_xk(
-    model: ConstrainedModule,
+    model: base_torch.ConstrainedModule,
     x: Union[Tuple[torch.Tensor, torch.Tensor], Tuple[torch.Tensor]],
 ) -> torch.Tensor:
-    if isinstance(model, BasicLstm):
+    if isinstance(model, recurrent_torch.BasicLstm):
         xk = torch.hstack([h[-1, 0, :] for h in x]).reshape(2 * model.nx, 1)
-    elif isinstance(model, BasicRnn):
+    elif isinstance(model, recurrent_torch.BasicRnn):
         xk = x[0][-1, 0, :].reshape(model.nx, 1)
     else:
         xk = x[0][0, :].reshape(model.nx, 1)

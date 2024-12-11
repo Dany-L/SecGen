@@ -6,12 +6,11 @@ from typing import Literal, Optional
 import mlflow
 
 from ..configuration.base import FIG_FOLDER_NAME
-from ..configuration.experiment import ExperimentTracker
 from . import events as ev
-from .base import BaseTracker, BaseTrackerConfig
+from .base import BaseTracker, TrackerConfig
 
 
-class MlflowConfig(BaseTrackerConfig):
+class MlflowConfig(TrackerConfig):
     tracking_uri: Optional[str] = None
 
 

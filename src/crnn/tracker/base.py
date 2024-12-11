@@ -11,16 +11,16 @@ class Event:
     msg: str
 
 
-class BaseTrackerConfig(BaseModel):
+class TrackerConfig(BaseModel):
     id: Optional[str] = ""
 
 
 class BaseTracker:
-    CONFIG = BaseTrackerConfig
+    CONFIG = TrackerConfig
 
     def __init__(
         self,
-        config: Optional[BaseTrackerConfig] = None,
+        config: Optional[TrackerConfig] = None,
         directory: str = os.environ["HOME"],
         model_name: str = "",
         type: Literal["training", "validation"] = "training",
@@ -41,21 +41,6 @@ class AggregatedTracker:
     def track(self, event: Event) -> None:
         for tracker in self.trackers:
             tracker.track(event)
-
-
-def get_trackers_from_config(
-    config: Dict[str, BaseTrackerConfig],
-    result_directory: str,
-    model_name: str,
-    type: Literal["training", "validation"],
-) -> List[BaseTracker]:
-    trackers = []
-    for tracker_config in config.values():
-        tracker_class = retrieve_tracker_class(tracker_config.tracker_class)
-        trackers.append(
-            tracker_class(tracker_config, result_directory, model_name, type)
-        )
-    return trackers
 
 
 def retrieve_tracker_class(tracker_class_string: str) -> Type[BaseTracker]:

@@ -1,19 +1,15 @@
-from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from functools import partial
 from typing import Callable, List, Literal, Optional, Tuple, Type, Union
 
 import cvxpy as cp
-import numpy as np
-from jax import Array
-from jax.typing import ArrayLike
 import jax.numpy as jnp
-from jax import grad, jit, vmap
-from jax import random
+import numpy as np
+from jax import Array, jit, random
+from jax.typing import ArrayLike
 from numpy.typing import NDArray
-from pydantic import BaseModel
+import torch
 
-from ..utils import transformation as trans
-from . import base as base
+from .. import base as base
 
 
 class ConstrainedModuleConfig(base.DynamicIdentificationConfig):
@@ -44,14 +40,25 @@ class ConstrainedModule(base.DynamicIdentificationModel):
         else:
             raise NotImplementedError(f"Unsupported multiplier: {config.multiplier}")
 
-        self.parameter_names = [
-            ["A", "B", "B2"],
-            ["C", "D", "D12"],
-            ["C2", "D21", "D22"],
+        self.parameter_names = ["A", "B", "B2", "C", "D", "D12", "C2", "D21", "D22"]
+        self.parameter_sizes = [
+            (self.nx, self.nx),
+            (self.nx, self.nd),
+            (self.nx, self.nw),
+            (self.ne, self.nx),
+            (self.ne, self.nd),
+            (self.ne, self.nw),
+            (self.nz, self.nx),
+            (self.nz, self.nd),
+            (self.nz, self.nw),
         ]
-        self.theta = jnp.zeros(
-            (self.nx + self.ne + self.nz, self.nx + self.nd + self.nw)
-        )
+        key = random.key(0)
+
+        self.theta = random.normal(key, (self.get_number_of_parameters(), 1))
+        self.theta = self.initialize_parameters()
+
+    def initialize_parameters(self) -> None:
+        self.theta = jnp.zeros((self.get_number_of_parameters(), 1))
 
     def get_optimization_multiplier_and_constraints(
         self,
@@ -67,33 +74,31 @@ class ConstrainedModule(base.DynamicIdentificationModel):
             raise NotImplementedError(f"Unsupported multiplier: {self.multiplier}")
         return (L, multiplier_constraints)
 
-    def get_L(self) -> Array:
+    def get_L(self, L: ArrayLike) -> Array:
         if self.multiplier == "none":
-            return self.L
+            return L
         elif self.multiplier == "diag":
-            return jnp.diag(self.L)
+            return jnp.diag(L[:, 0])
         else:
             raise NotImplementedError(f"Unsupported multiplier: {self.multiplier}")
 
-    def set_L(self, L: ArrayLike) -> None:
+    def set_L(self, L: ArrayLike) -> Array:
         if self.multiplier == "none":
-            self.L = L
+            L = L
         elif self.multiplier == "diag":
-            self.L.value = jnp.diag(L)
+            L = jnp.diag(L)
         else:
             raise NotImplementedError(f"Unsupported multiplier: {self.multiplier}")
+        return L
 
-    def add_semidefinite_constraints(self, constraints=List[Callable]) -> None:
-        pass
-
-    def add_pointwise_constraints(self, constraints=List[Callable]) -> None:
-        pass
-
-    def check_constraints(self) -> bool:
+    def check_constraints(self, theta: Optional[ArrayLike] = None) -> bool:
         # check if constraints are psd
-        for lmi in self.sdp_constraints():
-            _, info = jnp.linalg.cholesky(lmi())
-            if info > 0:
+        if theta is None:
+            theta = self.theta
+        for lmi in self.sdp_constraints(theta):
+            try:
+                jnp.linalg.cholesky(lmi())
+            except np.linalg.LinAlgError:
                 return False
 
         for scalar in self.pointwise_constraints():
@@ -101,31 +106,34 @@ class ConstrainedModule(base.DynamicIdentificationModel):
                 return False
         return True
 
-    def get_phi(self, t: float) -> Array:
-        if self.sdp_constraints() is not None:
-            batch_phi = (
-                1
-                / t
-                * jnp.sum(jnp.array([-jnp.logdet(M()) for M in self.sdp_constraints()]))
-            )
-        else:
-            batch_phi = jnp.array(0.0)
+    def sdp_constraints(self) -> List[Callable]:
+        return [lambda: np.eye(self.nz)]
+
+    def pointwise_constraints(self) -> List[Callable]:
+        return [lambda: 1.0]
+
+    def get_phi(self, t: float, theta: Optional[ArrayLike] = None) -> Union[torch.Tensor, Array]:
+        if theta is None:
+            theta = self.theta
+        batch_phi = 0.0
+        for M in self.sdp_constraints(theta):
+            _, slogdet = jnp.linalg.slogdet(M())
+            batch_phi += -1 / t * slogdet
+
         return batch_phi
 
     def get_number_of_parameters(self):
-        num_params = 0
-        for par_rows in self.theta:
-            num_params += sum([p.size for p in par_rows])
-        return num_params
+        return sum([np.prod(p) for p in self.parameter_sizes])
 
 
 def load_model(model: ConstrainedModule, model_file_name: str) -> ConstrainedModule:
 
     params_dict = jnp.load(model_file_name)
-    theta = []
-    for names in model.parameter_names:
-        theta.append([jnp.array(params_dict[n]) for n in names])
-    model.theta = theta
+    theta_list = [
+        jnp.array(params_dict[n]).flatten().reshape(-1, 1)
+        for n in model.parameter_names
+    ]
+    model.theta = jnp.vstack(theta_list)
     return model
 
 
@@ -147,36 +155,34 @@ def retrieve_model_class(
     return cls  # type: ignore
 
 
-def init_layer_params(nx, nd, nw, n_out, key) -> Array:
+def init_layer_params(nx, nd, nw, n_out, key, scale=1e-2) -> Array:
     x_key, d_key, w_key = random.split(key, 3)
-    return (
-        random.normal(x_key, (n_out, nx)),
-        random.normal(d_key, (n_out, nd)),
-        random.normal(w_key, (n_out, nw)),
-    )
+    # return (
+    #     scale * random.normal(x_key, (n_out, nx)),
+    #     scale * random.normal(d_key, (n_out, nd)),
+    #     scale * random.normal(w_key, (n_out, nw)),
+    # )
+    return (jnp.zeros((n_out, nx)), jnp.zeros((n_out, nd)), jnp.zeros((n_out, nw)))
 
 
 def init_network_params(
     n_outs: List[int], key: Array, nx: int, nd: int, nw: int
 ) -> List[Array]:
+    pars = []
     keys = random.split(key, len(n_outs))
-    return [
-        init_layer_params(nx, nd, nw, n_out, key) for n_out, key in zip(n_outs, keys)
-    ]
+    for n_out, key in zip(n_outs, keys):
+        pars.extend(init_layer_params(nx, nd, nw, n_out, key))
+
+    return pars
 
 
-@jit
+@partial(jit, static_argnames=["dF"])
 def update(
     theta: ArrayLike,
-    f: Callable[[ArrayLike], Array],
-    df: Callable[[ArrayLike], Array],
-    d: ArrayLike,
-    e: ArrayLike,
+    dF: Callable[[ArrayLike], Array],
     s=0.01,
 ) -> List[Array]:
-    return [
-        (x_param - s * d_x_param, d_param - s * d_d_parm, w_param - s * d_w_param)
-        for (x_param, d_param, w_param), (d_x_param, d_d_parm, d_w_param) in zip(
-            theta, df(theta, d, e)
-        )
-    ]
+    if isinstance(theta, list):
+        return [p - s * dP for p, dP in zip(theta, dF(theta))]
+    else:
+        return theta - s * dF(theta)

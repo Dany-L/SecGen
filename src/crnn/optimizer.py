@@ -1,12 +1,10 @@
-from typing import Iterable, List, Tuple
+from typing import List, Tuple
 
-import torch
 import torch.optim as opt
 
 from .configuration.experiment import BaseExperimentConfig
 from .models import base
-from .models import base_jax
-from .models import base_torch
+from .models.torch import base as base_torch
 
 
 def get_optimizer(

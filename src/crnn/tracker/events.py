@@ -5,7 +5,7 @@ from matplotlib.figure import Figure
 
 from ..configuration.base import InputOutput, NormalizationParameters
 from ..models.base import DynamicIdentificationModel
-from .base import BaseTrackerConfig, Event
+from .base import TrackerConfig, Event
 
 
 @dataclasses.dataclass
@@ -26,7 +26,7 @@ class Start(Event):
 
 @dataclasses.dataclass
 class SaveTrackingConfiguration(Event):
-    config: Dict[str, BaseTrackerConfig]
+    config: Dict[str, TrackerConfig]
     model_name: str
     model_directory: str
 

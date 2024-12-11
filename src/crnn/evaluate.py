@@ -17,11 +17,11 @@ from .data_io import get_result_directory_name, load_data, load_normalization
 from .datasets import RecurrentWindowHorizonDataset
 from .metrics import retrieve_metric_class
 from .models import base
-from .models import base_jax
-from .models import base_torch
 from .models.model_io import get_model_from_config, load_model
+from .models.torch import base as base_torch
 from .tracker import events as ev
-from .tracker.base import AggregatedTracker, get_trackers_from_config
+from .tracker.base import AggregatedTracker
+from .tracker.tracker_io import get_trackers_from_config
 from .utils import base as utils
 from .utils import plot
 
@@ -158,7 +158,7 @@ def evaluate_model(
         tracker.track(ev.Log("", f"{name}: {np.mean(e):.2f}"))
         tracker.track(ev.TrackMetrics("", {name: float(np.mean(e))}))
         metrics_result[name] = float(e)
-    results["num_parameters"] = predictor.get_number_of_parameters()
+    results["num_parameters"] = int(predictor.get_number_of_parameters())
     results["metrics"] = metrics_result
 
     additional_test_results: Dict[str, AdditionalTestResult] = dict()

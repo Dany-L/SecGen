@@ -1,20 +1,20 @@
 from typing import Callable, List, Literal, Optional, Tuple, Union
 
 import torch
-import torch.nn as nn
 
-from .base_torch import DynamicIdentificationModel, DynamicIdentificationConfig
+from ...utils import transformation as trans
+from .. import base
+from . import base as base_torch
+from jax import Array
+from jax.typing import ArrayLike
 
-# from base_torch import DynamicIdentificationConfig, DynamicIdentificationModel
-# from .base_torch import DynamicIdentificationConfig, DynamicIdentificationModel
 
-
-class BasicRnnConfig(DynamicIdentificationConfig):
+class BasicRnnConfig(base_torch.DynamicIdentificationConfig):
     num_layers: int = 5
     nonlinearity: Literal["tanh", "relu"]
 
 
-class BasicRnn(DynamicIdentificationModel):
+class BasicRnn(base_torch.DynamicIdentificationModel):
     CONFIG = BasicRnnConfig
 
     def __init__(
@@ -42,7 +42,7 @@ class BasicRnn(DynamicIdentificationModel):
         x0: Optional[
             Union[Tuple[torch.Tensor, torch.Tensor], Tuple[torch.Tensor]]
         ] = None,
-        theta: Optional[List] = None,
+        theta: Optional[ArrayLike] = None,
     ) -> Tuple[
         torch.Tensor,
         Union[Tuple[torch.Tensor, torch.Tensor], Tuple[torch.Tensor]],
@@ -56,28 +56,19 @@ class BasicRnn(DynamicIdentificationModel):
         e_hat = self.output_layer.forward(x)
         return (e_hat, (h,))
 
-    def add_semidefinite_constraints(self, constraints=List[Callable]) -> None:
-        pass
-
-    def add_pointwise_constraints(self, constraints=List[Callable]) -> None:
-        pass
-
     def initialize_parameters(self) -> None:
         pass
 
     def project_parameters(self) -> None:
         pass
 
-    def sdp_constraints(self) -> List[Callable]:
-        pass
 
-
-class BasicLstmConfig(DynamicIdentificationConfig):
+class BasicLstmConfig(base_torch.DynamicIdentificationConfig):
     dropout: float = 0.25
     num_layers: int = 5
 
 
-class BasicLstm(DynamicIdentificationModel):
+class BasicLstm(base_torch.DynamicIdentificationModel):
     CONFIG = BasicLstmConfig
 
     def __init__(self, config: BasicLstmConfig) -> None:
@@ -104,7 +95,7 @@ class BasicLstm(DynamicIdentificationModel):
         x0: Optional[
             Union[Tuple[torch.Tensor, torch.Tensor], Tuple[torch.Tensor]]
         ] = None,
-        theta: Optional[List] = None,
+        theta: Optional[ArrayLike] = None,
     ) -> Tuple[
         torch.Tensor,
         Union[Tuple[torch.Tensor, torch.Tensor], Tuple[torch.Tensor]],
@@ -114,17 +105,69 @@ class BasicLstm(DynamicIdentificationModel):
         e_hat = self.output_layer.forward(x)
         return (e_hat, (h, c))
 
-    def add_semidefinite_constraints(self, constraints=List[Callable]) -> None:
-        pass
-
-    def add_pointwise_constraints(self, constraints=List[Callable]) -> None:
-        pass
-
     def initialize_parameters(self) -> None:
         pass
 
     def project_parameters(self) -> None:
         pass
 
+
+class BasicLtiRnn(base_torch.ConstrainedModule):
+    CONFIG = base_torch.ConstrainedModuleConfig
+
+    def __init__(self, config: base_torch.ConstrainedModuleConfig) -> None:
+        super().__init__(config)
+        self.nonlinearity = config.nonlinearity
+
+        mean = 0.0
+        self.A = torch.zeros((self.nx, self.nx))
+        self.B = torch.zeros((self.nx, self.nd))
+        self.B2 = torch.eye(self.nw)
+
+        self.C = torch.zeros((self.ne, self.nx))
+        self.D = torch.zeros((self.ne, self.nd))
+
+        self.D12 = torch.nn.Parameter(
+            torch.normal(
+                mean * torch.ones((self.ne, self.nw)),
+                1 / self.ne * torch.ones((self.ne, self.nw)),
+            )
+        )
+        self.C2 = torch.nn.Parameter(
+            torch.normal(
+                mean * torch.ones((self.nz, self.nx)),
+                1 / self.nz * torch.ones((self.nz, self.nx)),
+            )
+        )
+        self.D21 = torch.nn.Parameter(
+            torch.normal(
+                mean * torch.ones((self.nz, self.nd)),
+                1 / self.nz * torch.ones((self.nz, self.nd)),
+            )
+        )
+        self.D22 = torch.zeros((self.nz, self.nw))
+
+    def set_lure_system(self) -> base.LureSystemClass:
+        theta = trans.torch_bmat(
+            [
+                [self.A, self.B, self.B2],
+                [self.C, self.D, self.D12],
+                [self.C2, self.D21, self.D22],
+            ]
+        )
+        sys = base.get_lure_matrices(theta, self.nx, self.nd, self.ne, self.nl)
+        self.lure = base.LureSystem(sys)
+
+        return sys
+
+    def check_constraints(self) -> bool:
+        return True
+
     def sdp_constraints(self) -> List[Callable]:
+        pass
+
+    def initialize_parameters(self) -> None:
+        pass
+
+    def project_parameters(self) -> None:
         pass
