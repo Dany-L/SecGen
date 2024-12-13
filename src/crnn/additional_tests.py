@@ -57,7 +57,7 @@ class StabilityOfInitialState(AdditionalTest):
         d = torch.zeros(1, self.horizon, self.nd)
         xk_norm_max, e_hat_max, x0_max = (
             torch.tensor(0.0),
-            torch.zeros((self.horizon, self.ne)),
+            torch.zeros((1, self.horizon, self.ne)),
             (torch.zeros((self.nx, 1))),
         )
 

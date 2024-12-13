@@ -56,8 +56,8 @@ class BasicRnn(base_torch.DynamicIdentificationModel):
         e_hat = self.output_layer.forward(x)
         return (e_hat, (h,))
 
-    def initialize_parameters(self) -> None:
-        pass
+    def initialize_parameters(self) -> str:
+        return "standard initialization of parameters"
 
     def project_parameters(self) -> None:
         pass
@@ -105,8 +105,8 @@ class BasicLstm(base_torch.DynamicIdentificationModel):
         e_hat = self.output_layer.forward(x)
         return (e_hat, (h, c))
 
-    def initialize_parameters(self) -> None:
-        pass
+    def initialize_parameters(self) -> str:
+        return "standard initialization of parameters"
 
     def project_parameters(self) -> None:
         pass
@@ -167,7 +167,7 @@ class BasicLtiRnn(base_torch.ConstrainedModule):
         pass
 
     def initialize_parameters(self) -> None:
-        pass
+        return "standard initialization of parameters"
 
     def project_parameters(self) -> None:
         pass

@@ -47,7 +47,7 @@ class ConstrainedLtiRnn(BasicLtiRnn):
         self.ga2 = 0.0
         self.theta = random.normal(key, (self.get_number_of_parameters(), 1))
 
-    def initialize_parameters(self) -> None:
+    def initialize_parameters(self) -> str:
 
         X = cp.Variable((self.nx, self.nx), symmetric=True)
 
@@ -124,6 +124,8 @@ class ConstrainedLtiRnn(BasicLtiRnn):
         self.ga2 = 10 * ga2.value
 
         self.theta = np.vstack([p.flatten().reshape(-1, 1) for p in theta_list])
+
+        return f'initialized theta with cvxpy solution, ga2: {ga2.value}, problem status: {problem.status}'
 
     def forward_unbatched(
         self, d: ArrayLike, x0: ArrayLike, theta: ArrayLike

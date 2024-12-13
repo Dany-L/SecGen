@@ -52,8 +52,7 @@ class DynamicIdentificationModel(ABC):
         pass
 
     def set_lure_system(self) -> LureSystemClass:
-        return LureSystem(
-            get_lure_matrices(
+        lure_matrices = get_lure_matrices(
                 torch.zeros(
                     size=(self.nx + self.ne + self.nw, self.nx + self.nd + self.nz)
                 ),
@@ -61,7 +60,8 @@ class DynamicIdentificationModel(ABC):
                 self.nd,
                 self.ne,
             )
-        )
+        self.lure = LureSystem(lure_matrices)
+        return lure_matrices
 
     @abstractmethod
     def forward(

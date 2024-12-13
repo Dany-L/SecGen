@@ -148,21 +148,21 @@ def get_datasets(
     output_seqs: List[NDArray[np.float64]],
     horizon: int,
     window: int,
-) -> Tuple[Dataset]:
-    return (
+) -> List[Dataset]:
+    return [
         RecurrentWindowDataset(input_seqs, output_seqs, horizon, window),
         RecurrentWindowHorizonDataset(input_seqs, output_seqs, horizon, window),
-    )
+    ]
 
 
 def get_loaders(
-    datasets: Tuple[Dataset],
+    datasets: List[Dataset],
     batch_size: int,
     device: torch.device = torch.device("cpu"),
     drop_last: bool = True,
     shuffle: bool = True,
-) -> Tuple[DataLoader]:
-    return (
+) -> List[DataLoader]:
+    return [
         DataLoader(
             dataset,
             batch_size,
@@ -171,4 +171,4 @@ def get_loaders(
             generator=torch.Generator(device=device),
         )
         for dataset in datasets
-    )
+    ]

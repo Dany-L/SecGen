@@ -59,6 +59,7 @@ class OptimizerConfig(BaseModel):
 class HorizonsConfig(BaseModel):
     training: int
     testing: int
+    validation: int
 
 
 class ExperimentSettings(BaseModel):
@@ -92,7 +93,7 @@ class BaseExperimentConfig(BaseModel):
     increase_rate: float = 10.0
     increase_after_epochs: int = 100
     debug: bool = False
-    ensure_constrained_method: Literal["armijo"] = None
+    ensure_constrained_method: Literal["armijo","project","backtracking"] = 'project'
 
 
 class ExperimentConfig(BaseModel):

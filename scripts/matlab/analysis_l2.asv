@@ -1,6 +1,6 @@
 clear all, close all,
 %%
-experiment_name = 'P-2-zero';
+experiment_name = 'P-4-zero';
 % result_directory = '~/cloud_privat/03_Promotion/_transfer';
 result_directory = '~/actuated_pendulum/results_local';
 
@@ -42,8 +42,8 @@ for model_idx =1:length(model_names)
     end
 
     %% load controller parameters
-    nx = size(A_tilde,2); nd = size(B_tilde,2); nw = size(B2_tilde,2); 
-    ne = size(C,1); nz = nw;
+    nx = size(A_tilde,1); nd = size(B_tilde,1); nw = size(B2_tilde,1); 
+    ne = size(C,2); nz = nw;
     % nx = size(A,1); nw=size(B2,1); nz=nw; ne=size(C,1);
     fprintf('Multiplier type: %s\n', model_cfg.multiplier)
     switch model_cfg.multiplier
@@ -56,16 +56,16 @@ for model_idx =1:length(model_names)
     P_r = [-eye(nw) b*eye(nw); eye(nw) -a*eye(nw)];
     P = P_r' * [zeros(nw,nw), L'; L, zeros(nw,nw)] * P_r;
 
-    % ga2 = 0.001;
+    ga2 = 10;
 
     M11_orig = [-X,zeros(nx,nd), C2_tilde';
-        zeros(nd,nx), -ga2*eye(nd), D21_tilde';
-        C2_tilde, D21_tilde, -2*L];
+        zeros(nd,nx), ga2*eye(nd), D21_tilde';
+        -C2_tilde, D21_tilde, -2*L];
     M21_orig = [A_tilde, B_tilde, B2_tilde;
         C, D, D12];
     M22_orig = [-X, zeros(nx,ne);
         zeros(ne,nx), -eye(ne)];
-    M_orig = [M11_orig, M21_orig';M21_orig, M22_orig];
+    M_orig = [M11_orig, M21_orig';M21_orig, -X];
     fprintf('max real eig M_orig: %f\n',max(real(eig(M_orig))))
 
     X_inv = X^(-1);

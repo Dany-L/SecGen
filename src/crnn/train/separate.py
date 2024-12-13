@@ -19,6 +19,7 @@ from .base import PLOT_AFTER_EPOCHS, InitPred
 class SeparateInitPredictor(InitPred):
 
     def train(
+        self,
         models: Tuple[base.DynamicIdentificationModel],
         loaders: Tuple[DataLoader],
         exp_config: BaseExperimentConfig,
@@ -27,7 +28,9 @@ class SeparateInitPredictor(InitPred):
         loss_function: nn.Module,
         tracker: AggregatedTracker = AggregatedTracker(),
     ) -> Tuple[Optional[base.DynamicIdentificationModel]]:
-        init_loader, pred_loader = loaders
+        train_loaders, validation_loaders = loaders
+        init_loader, pred_loader = train_loaders
+        _, validation_loader = validation_loaders
         initializer, predictor = models
         opt_init, opt_pred = optimizers
         sch_init, sch_pred = schedulers

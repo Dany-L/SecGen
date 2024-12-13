@@ -1,6 +1,6 @@
 import os
 import time
-from abc import abstractmethod
+from abc import ABC, abstractmethod
 from typing import Callable, Type, List, Optional, Tuple
 
 import matplotlib.pyplot as plt
@@ -29,12 +29,16 @@ from ..utils import base as utils
 PLOT_AFTER_EPOCHS: int = 100
 
 
-class InitPred:
+class InitPred(ABC):
+
+    def __init__(self) -> None:
+        pass
 
     @abstractmethod
     def train(
-        models: Tuple[base.DynamicIdentificationModel],
-        loaders: Tuple[DataLoader],
+        self,
+        models: List[base.DynamicIdentificationModel],
+        loaders: List[DataLoader],
         exp_config: BaseExperimentConfig,
         optimizers: List[Optimizer],
         loss_function: nn.Module,
@@ -90,6 +94,7 @@ def train(
         )
     )
 
+    # training data
     train_inputs, train_outputs = load_data(
         experiment_config.input_names,
         experiment_config.output_names,
@@ -115,18 +120,33 @@ def train(
         np.mean(np.vstack(n_train_outputs) < 1e-5)
         and np.std(np.vstack(n_train_outputs)) - 1 < 1e-5
     )
+    # validation data
+    val_inputs, val_outputs = load_data(
+        experiment_config.input_names,
+        experiment_config.output_names,
+        "validation",
+        dataset_dir,
+    )
+    n_val_inputs = utils.normalize(val_inputs, input_mean, input_std)
+    n_val_outputs = utils.normalize(val_outputs, output_mean, output_std)
+
     start_time = time.time()
     with torch.device(device):
-        loaders = get_loaders(
+        loaders = [get_loaders(
             get_datasets(
-                n_train_inputs,
-                n_train_outputs,
-                experiment_config.horizons.training,
+                inp,
+                output,
+                horizon,
                 experiment_config.window,
             ),
-            experiment_config.batch_size,
+            batch_size,
             device,
-        )
+        ) for inp, output, horizon, batch_size in zip(
+            [n_train_inputs,n_val_inputs],
+            [n_train_outputs,n_val_outputs], 
+            [experiment_config.horizons.training,experiment_config.horizons.validation],
+            [experiment_config.batch_size, 1])
+        ]
 
         initializer, predictor = get_model_from_config(model_config)
         optimizers = get_optimizer(experiment_config, (initializer, predictor))
@@ -135,9 +155,10 @@ def train(
         loss_fcn = get_loss_function(experiment_config.loss_function)
 
         initial_hidden_state = experiment_config.initial_hidden_state
-        trainer = retrieve_trainer_class(
+        trainer_class = retrieve_trainer_class(
             f"crnn.train.{initial_hidden_state}.{initial_hidden_state.title()}InitPredictor"
         )
+        trainer = trainer_class()
 
         (initializer, predictor) = trainer.train(
             models=(initializer, predictor),
@@ -184,7 +205,9 @@ class Armijo:
         while f(theta + s * dir) > f(theta) + alpha * s * dir.T @ dF(
             theta
         ) or self.get_isnan(f(theta + s * dir)):
+            
             s = beta * s
+            # print(torch.squeeze(theta+s*dir))
             i += 1
             if i > 100:
                 raise ValueError

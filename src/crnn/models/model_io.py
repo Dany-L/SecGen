@@ -15,9 +15,6 @@ def get_model_from_config(
     predictor: Optional[base.DynamicIdentificationModel] = None
     initializer: Optional[base.DynamicIdentificationModel] = None
 
-    # if "jax" in model_config.m_class:
-    #     model_class = base.retrieve_model_class(model_config.m_class)
-    # else:
     model_class = base.retrieve_model_class(model_config.m_class)
 
     if isinstance(model_class, BasicLstm):

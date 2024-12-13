@@ -40,7 +40,6 @@
         "static_parameters":{
             "debug": true,
             "t": 1e3,
-            "ensure_constrained_method": "armijo",
             "increase_rate": 10.0,
             "increase_after_epochs": 20,
             "epochs": 2,
@@ -55,6 +54,7 @@
             "loss_function": "mse",
             "horizons":{
                 "training": 40,
+                "validation": 100,
                 "testing": 100
             },
             "input_names":[
@@ -70,7 +70,8 @@
                 "separate",
                 "zero",
                 "joint"
-            ]
+            ],
+            "ensure_constrained_method": ["project","armijo", "backtracking"]
         }
 
     },

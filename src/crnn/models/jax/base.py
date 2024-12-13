@@ -57,8 +57,9 @@ class ConstrainedModule(base.DynamicIdentificationModel):
         self.theta = random.normal(key, (self.get_number_of_parameters(), 1))
         self.theta = self.initialize_parameters()
 
-    def initialize_parameters(self) -> None:
+    def initialize_parameters(self) -> str:
         self.theta = jnp.zeros((self.get_number_of_parameters(), 1))
+        return "initialized theta with zeros"
 
     def get_optimization_multiplier_and_constraints(
         self,

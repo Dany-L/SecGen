@@ -73,8 +73,8 @@ class BasicLtiRnn(base_jax.ConstrainedModule):
     def pointwise_constraints(self) -> List[Callable]:
         return [lambda: np.eye(1)]
 
-    def initialize_parameters(self) -> None:
-        pass
+    def initialize_parameters(self) -> str:
+        return "no initialization of parameters needed"
 
     def project_parameters(self) -> None:
         pass

@@ -31,6 +31,7 @@ class ConstrainedModuleConfig(DynamicIdentificationConfig):
     sdp_opt: str = cp.MOSEK
     nonlinearity: Literal["tanh", "relu", "deadzone", "sat"] = "tanh"
     multiplier: Literal["none", "diag", "zf"] = "none"
+    ga2: float = 1.0
 
 
 class ConstrainedModule(DynamicIdentificationModel):
@@ -199,74 +200,41 @@ class StableConstrainedModule(ConstrainedModule):
         return sys
 
 
-class IoConstrainedModule(ConstrainedModule):
+class L2StableConstrainedModule(ConstrainedModule):
     def __init__(self, config: ConstrainedModuleConfig) -> None:
         super().__init__(config)
-        mean = 0.0
-        self.A = torch.nn.Parameter(
-            torch.normal(
-                mean * torch.ones((self.nx, self.nx)),
-                1 / self.nx * torch.ones((self.nx, self.nx)),
-            )
-        )
-        self.B = torch.nn.Parameter(
-            torch.normal(
-                mean * torch.ones((self.nx, self.nd)),
-                1 / self.nx * torch.ones((self.nx, self.nd)),
-            )
-        )
-        self.B2 = torch.nn.Parameter(
-            torch.normal(
-                mean * torch.ones((self.nx, self.nw)),
-                1 / self.nx * torch.ones((self.nx, self.nw)),
-            )
-        )
+        self.A_tilde = torch.nn.Parameter(torch.zeros((self.nx, self.nx)))
+        self.B_tilde = torch.nn.Parameter(torch.zeros((self.nx, self.nd)))
+        self.B2_tilde = torch.nn.Parameter(torch.zeros((self.nx, self.nw)))
+        
+        self.C = torch.nn.Parameter(torch.zeros((self.ne, self.nx)))
+        self.D = torch.nn.Parameter(torch.zeros((self.ne, self.nd)))
+        self.D12 = torch.nn.Parameter(torch.zeros((self.ne, self.nw)))
 
-        self.C = torch.nn.Parameter(
-            torch.normal(
-                mean * torch.ones((self.ne, self.nx)),
-                1 / self.ne * torch.ones((self.ne, self.nx)),
-            )
-        )
-        self.D = torch.nn.Parameter(
-            torch.normal(
-                mean * torch.ones((self.ne, self.nd)),
-                1 / self.ne * torch.ones((self.ne, self.nd)),
-            )
-        )
-        self.D12 = torch.nn.Parameter(
-            torch.normal(
-                mean * torch.ones((self.ne, self.nw)),
-                1 / self.ne * torch.ones((self.ne, self.nw)),
-            )
-        )
-
-        self.C2 = torch.nn.Parameter(
-            torch.normal(
-                mean * torch.ones((self.nz, self.nx)),
-                1 / self.ne * torch.ones((self.nz, self.nx)),
-            )
-        )
-        self.D21_tilde = torch.nn.Parameter(
-            torch.normal(
-                mean * torch.ones((self.nz, self.nd)),
-                1 / self.nz * torch.ones((self.nz, self.nd)),
-            )
-        )
+        self.C2_tilde = torch.nn.Parameter(torch.zeros((self.nz, self.nx)))
+        self.D21_tilde = torch.nn.Parameter(torch.zeros((self.nz, self.nd)))
         self.D22 = torch.zeros((self.nz, self.nw))
 
-        self.ga2 = torch.nn.Parameter(torch.ones((1, 1)))
+        self.X = torch.nn.Parameter(torch.eye(self.nx, self.nx))
+        
+        self.ga2 = torch.nn.Parameter(torch.tensor([[config.ga2]]), requires_grad=False)
+
+        for n, p in self.named_parameters():
+            if p.requires_grad and not (n=='X' or n=='L'):
+                torch.nn.init.normal_(p, mean=0.0, std=1e-1)
 
     def set_lure_system(self) -> base.LureSystemClass:
+        X_inv = torch.linalg.inv(self.X)
+        A = X_inv @ self.A_tilde
+        B = X_inv @ self.B_tilde
+        B2 = X_inv @ self.B2_tilde
 
-        D21 = torch.linalg.inv(self.get_L()) @ self.D21_tilde
+        L_inv = torch.linalg.inv(self.get_L())
+        C2 = L_inv @ self.C2_tilde
+        D21 = L_inv @ self.D21_tilde
 
         theta = trans.torch_bmat(
-            [
-                [self.A, self.B, self.B2],
-                [self.C, self.D, self.D12],
-                [self.C2, D21, self.D22],
-            ]
+            [[A, B, B2], [self.C, self.D, self.D12], [C2, D21, self.D22]]
         )
         sys = base.get_lure_matrices(theta, self.nx, self.nd, self.ne, self.nl)
         self.lure = base.LureSystem(sys)
@@ -293,6 +261,7 @@ class OptFcn:
 
     def f(self, theta: torch.Tensor) -> torch.Tensor:
         self.set_vec_pars_to_model(theta)
+        # print(torch.hstack([p.squeeze() for p in self.nn.parameters()]))
         self.nn.set_lure_system()
         loss = self.loss(self.nn(self.d, self.x0)[0], self.e)
         phi = self.nn.get_phi(self.t)
