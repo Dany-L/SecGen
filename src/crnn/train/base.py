@@ -5,7 +5,6 @@ from typing import Callable, Type, List, Optional, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
-import torch
 from matplotlib.figure import Figure
 import torch
 from torch import nn
@@ -132,20 +131,26 @@ def train(
 
     start_time = time.time()
     with torch.device(device):
-        loaders = [get_loaders(
-            get_datasets(
-                inp,
-                output,
-                horizon,
-                experiment_config.window,
-            ),
-            batch_size,
-            device,
-        ) for inp, output, horizon, batch_size in zip(
-            [n_train_inputs,n_val_inputs],
-            [n_train_outputs,n_val_outputs], 
-            [experiment_config.horizons.training,experiment_config.horizons.validation],
-            [experiment_config.batch_size, 1])
+        loaders = [
+            get_loaders(
+                get_datasets(
+                    inp,
+                    output,
+                    horizon,
+                    experiment_config.window,
+                ),
+                batch_size,
+                device,
+            )
+            for inp, output, horizon, batch_size in zip(
+                [n_train_inputs, n_val_inputs],
+                [n_train_outputs, n_val_outputs],
+                [
+                    experiment_config.horizons.training,
+                    experiment_config.horizons.validation,
+                ],
+                [experiment_config.batch_size, 1],
+            )
         ]
 
         initializer, predictor = get_model_from_config(model_config)
@@ -205,12 +210,13 @@ class Armijo:
         while f(theta + s * dir) > f(theta) + alpha * s * dir.T @ dF(
             theta
         ) or self.get_isnan(f(theta + s * dir)):
-            
+
             s = beta * s
             # print(torch.squeeze(theta+s*dir))
             i += 1
             if i > 100:
-                raise ValueError
+                # raise ValueError
+                return s
         # print(f'linesearch steps: {i}')
         return s
 

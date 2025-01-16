@@ -113,7 +113,9 @@ class ConstrainedModule(base.DynamicIdentificationModel):
     def pointwise_constraints(self) -> List[Callable]:
         return [lambda: 1.0]
 
-    def get_phi(self, t: float, theta: Optional[ArrayLike] = None) -> Union[torch.Tensor, Array]:
+    def get_phi(
+        self, t: float, theta: Optional[ArrayLike] = None
+    ) -> Union[torch.Tensor, Array]:
         if theta is None:
             theta = self.theta
         batch_phi = 0.0

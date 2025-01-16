@@ -21,10 +21,10 @@ class DynamicIdentificationModel(base.DynamicIdentificationModel, nn.Module):
         return sum(p.numel() for p in self.parameters() if p.requires_grad)
 
     def pointwise_constraints(self) -> List[Callable]:
-        return [lambda: 1]
+        return [lambda: torch.tensor(1)]
 
     def sdp_constraints(self) -> List[Callable]:
-        return [lambda: np.eye(self.nz)]
+        return [lambda: torch.eye(self.nz)]
 
 
 class ConstrainedModuleConfig(DynamicIdentificationConfig):
@@ -74,22 +74,6 @@ class ConstrainedModule(DynamicIdentificationModel):
             raise NotImplementedError(f"Unsupported multiplier: {self.multiplier}")
         return (L, multiplier_constraints)
 
-    def get_L(self) -> torch.Tensor:
-        if self.multiplier == "none":
-            return self.L
-        elif self.multiplier == "diag":
-            return torch.diag(self.L)
-        else:
-            raise NotImplementedError(f"Unsupported multiplier: {self.multiplier}")
-
-    def set_L(self, L: torch.Tensor) -> None:
-        if self.multiplier == "none":
-            self.L = L
-        elif self.multiplier == "diag":
-            self.L.value = torch.diag(L)
-        else:
-            raise NotImplementedError(f"Unsupported multiplier: {self.multiplier}")
-
     def forward(
         self,
         d: torch.Tensor,
@@ -127,7 +111,9 @@ class ConstrainedModule(DynamicIdentificationModel):
                     return False
         return True
 
-    def get_phi(self, t: float, theta: Optional[ArrayLike] = None) -> Union[torch.Tensor, Array]:
+    def get_phi(
+        self, t: float, theta: Optional[ArrayLike] = None
+    ) -> Union[torch.Tensor, Array]:
         if self.sdp_constraints() is not None:
             batch_phi = (
                 1
@@ -206,7 +192,7 @@ class L2StableConstrainedModule(ConstrainedModule):
         self.A_tilde = torch.nn.Parameter(torch.zeros((self.nx, self.nx)))
         self.B_tilde = torch.nn.Parameter(torch.zeros((self.nx, self.nd)))
         self.B2_tilde = torch.nn.Parameter(torch.zeros((self.nx, self.nw)))
-        
+
         self.C = torch.nn.Parameter(torch.zeros((self.ne, self.nx)))
         self.D = torch.nn.Parameter(torch.zeros((self.ne, self.nd)))
         self.D12 = torch.nn.Parameter(torch.zeros((self.ne, self.nw)))
@@ -215,16 +201,19 @@ class L2StableConstrainedModule(ConstrainedModule):
         self.D21_tilde = torch.nn.Parameter(torch.zeros((self.nz, self.nd)))
         self.D22 = torch.zeros((self.nz, self.nw))
 
-        self.X = torch.nn.Parameter(torch.eye(self.nx, self.nx))
-        
+        # X is required to be symmetric. We use a lower triangular matrix as parameter.
+        # X = L @ L.T then ensures symmetry.
+        self.Lx = torch.nn.Parameter(torch.eye(self.nx, self.nx))
+
         self.ga2 = torch.nn.Parameter(torch.tensor([[config.ga2]]), requires_grad=False)
 
         for n, p in self.named_parameters():
-            if p.requires_grad and not (n=='X' or n=='L'):
-                torch.nn.init.normal_(p, mean=0.0, std=1e-1)
+            if p.requires_grad and not (n == "X" or n == "L"):
+                # torch.nn.init.normal_(p, mean=0.0, std=1/self.nx)
+                torch.nn.init.normal_(p, mean=0.0, std=1)
 
     def set_lure_system(self) -> base.LureSystemClass:
-        X_inv = torch.linalg.inv(self.X)
+        X_inv = torch.linalg.inv(self.get_X())
         A = X_inv @ self.A_tilde
         B = X_inv @ self.B_tilde
         B2 = X_inv @ self.B2_tilde
@@ -240,6 +229,25 @@ class L2StableConstrainedModule(ConstrainedModule):
         self.lure = base.LureSystem(sys)
 
         return sys
+
+    def get_L(self) -> torch.Tensor:
+        if self.multiplier == "none":
+            return self.L
+        elif self.multiplier == "diag":
+            return torch.diag(self.L)
+        else:
+            raise NotImplementedError(f"Unsupported multiplier: {self.multiplier}")
+
+    def set_L(self, L: torch.Tensor) -> None:
+        if self.multiplier == "none":
+            self.L = L
+        elif self.multiplier == "diag":
+            self.L.value = torch.diag(L)
+        else:
+            raise NotImplementedError(f"Unsupported multiplier: {self.multiplier}")
+
+    def get_X(self) -> torch.Tensor:
+        return self.Lx @ self.Lx.T
 
 
 class OptFcn:

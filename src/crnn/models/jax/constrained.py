@@ -125,7 +125,7 @@ class ConstrainedLtiRnn(BasicLtiRnn):
 
         self.theta = np.vstack([p.flatten().reshape(-1, 1) for p in theta_list])
 
-        return f'initialized theta with cvxpy solution, ga2: {ga2.value}, problem status: {problem.status}'
+        return f"initialized theta with cvxpy solution, ga2: {ga2.value}, problem status: {problem.status}"
 
     def forward_unbatched(
         self, d: ArrayLike, x0: ArrayLike, theta: ArrayLike

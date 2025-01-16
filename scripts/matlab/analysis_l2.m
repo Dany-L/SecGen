@@ -1,8 +1,14 @@
 clear all, close all,
 %%
-experiment_name = 'P-2-zero';
-% result_directory = '~/cloud_privat/03_Promotion/_transfer';
-result_directory = '~/actuated_pendulum/results_local';
+
+experiment_name = 'MSD-16-zero-dual';
+
+result_directory = '~/coupled-msd/2024_12_12-cRnn';
+test_file_name = '~/coupled-msd/data/coupled-msd-routine/processed/test/0093_simulation_T_1500.csv';
+
+% result_directory = '~/actuated_pendulum/results_local';
+% test_file_name = '~/actuated_pendulum/data/nonlinear-initial_state-0_M-500_T-10/processed/test/0198_simulation_T_10.csv';
+
 
 % model_names = {'tanh','dzn','dznGen'};
 model_names = {'tanh'};
@@ -13,7 +19,7 @@ for model_idx =1:length(model_names)
 
     e_m_name = sprintf('%s-%s', experiment_name, model_name);
     parameter_file_name = sprintf('model_params-%s.mat', e_m_name);
-    test_file_name = '/Users/jack/actuated_pendulum/data/nonlinear-initial_state-0_M-500_T-10/processed/test/0198_simulation_T_10.csv';
+    
 %     test_file_name = '/Users/jack/actuated_pendulum/data/ood-initial_state_0-s_4_M-100_T-10/processed/test/0058_simulation_T_10.csv';
     experiment_config_file_name = sprintf('config-experiment-%s.json', e_m_name);
     model_config_file_name = sprintf('config-model-%s.json', e_m_name);
@@ -57,7 +63,8 @@ for model_idx =1:length(model_names)
     P = P_r' * [zeros(nw,nw), L'; L, zeros(nw,nw)] * P_r;
 
     % ga2 = 0.001;
-
+    ga2 = model_cfg.ga2;
+    X = Lx * Lx';
     M11_orig = [-X,zeros(nx,nd), C2_tilde';
         zeros(nd,nx), -ga2*eye(nd), D21_tilde';
         C2_tilde, D21_tilde, -2*L];
@@ -131,7 +138,7 @@ for model_idx =1:length(model_names)
             
 
     %% simulate
-    e_hat_n = d_sim(sys, d_n, zeros(nx,1), @dzn);
+    e_hat_n = d_sim(sys, d_n, zeros(nx,1), @tanh);
     e_hat = e_hat_n .* normalization.output_std + normalization.output_mean;
     results{model_idx} = e_hat;
 

@@ -71,7 +71,7 @@
                 "zero",
                 "joint"
             ],
-            "ensure_constrained_method": ["project","armijo", "backtracking"]
+            "ensure_constrained_method": ["project","armijo", "backtracking", "dual"]
         }
 
     },
@@ -104,7 +104,7 @@
             "m_class": "crnn.models.torch.constrained.ConstrainedLtiRnn",
             "parameters": {
                 "nonlinearity": "tanh",
-                "multiplier": "none"
+                "multiplier": "diag"
             }
         },
         {

@@ -6,7 +6,6 @@ from jax import grad
 from torch import nn
 from torch.optim import Optimizer, lr_scheduler
 from torch.utils.data import DataLoader
-import copy
 
 from ..configuration.experiment import BaseExperimentConfig
 from ..models import base
@@ -21,16 +20,22 @@ from .base import PLOT_AFTER_EPOCHS, Armijo, InitPred
 
 class ZeroInitPredictor(InitPred):
 
-    def validate(self, predictor:base.DynamicIdentificationModel, val_loader:DataLoader, loss_function:nn.Module) -> torch.Tensor:
+    def validate(
+        self,
+        predictor: base.DynamicIdentificationModel,
+        val_loader: DataLoader,
+        loss_function: nn.Module,
+    ) -> torch.Tensor:
         with torch.no_grad():
             loss = torch.tensor(0.0)
             for batch in val_loader:
                 e_hat, _ = predictor.forward(batch["d"])
                 loss += loss_function(e_hat, batch["e"]).item()
 
-        return 1/len(val_loader) * loss
+        return 1 / len(val_loader) * loss
 
-    def train(self,
+    def train(
+        self,
         models: List[base.DynamicIdentificationModel],
         loaders: List[DataLoader],
         exp_config: BaseExperimentConfig,
@@ -46,7 +51,7 @@ class ZeroInitPredictor(InitPred):
         _, opt_pred = optimizers
         _, sch_pred = schedulers
         status = predictor.initialize_parameters()
-        tracker.track(ev.Log("", f'Initialized predictor: {status}'))
+        tracker.track(ev.Log("", f"Initialized predictor: {status}"))
         predictor.set_lure_system()
         # predictor.train()
         t, increase_rate, increase_after_epochs = (
@@ -54,12 +59,32 @@ class ZeroInitPredictor(InitPred):
             exp_config.increase_rate,
             exp_config.increase_after_epochs,
         )
-        decrease_rate = 1/4
+        decrease_rate = 1 / 4
         alpha = 0.5
+        dual_vars = [
+            torch.tensor(1.0)
+            for _ in range(
+                len(predictor.sdp_constraints())
+                + len(predictor.pointwise_constraints())
+            )
+        ]
+        min_eigenvals = [
+            torch.tensor(0.0)
+            for _ in range(
+                len(predictor.sdp_constraints())
+                + len(predictor.pointwise_constraints())
+            )
+        ]
 
         steps_without_improvement, val_loss = 0, torch.tensor(0.0)
         for epoch in range(exp_config.epochs):
-            loss, phi, projection_counter, num_backtracking_steps, grads = 0.0, 0.0, 0, 0, torch.zeros((predictor.get_number_of_parameters(),1))  # phi is barrier
+            loss, phi, projection_counter, num_backtracking_steps, grads = (
+                0.0,
+                0.0,
+                0,
+                0,
+                torch.zeros((predictor.get_number_of_parameters(), 1)),
+            )  # phi is barrier
 
             for step, batch in enumerate(train_loader):
                 # predictor.zero_grad()
@@ -161,12 +186,13 @@ class ZeroInitPredictor(InitPred):
                         opt_pred.step()
 
                 elif exp_config.ensure_constrained_method == "project":
+                    predictor.zero_grad()
                     e_hat, _ = predictor.forward(batch["d"])
                     batch_loss = loss_function(e_hat, batch["e"])
                     batch_phi = predictor.get_phi(t)
                     (batch_loss + batch_phi).backward()
                     opt_pred.step()
-                    
+
                     if not predictor.check_constraints():
                         problem_status = predictor.project_parameters()
                         # tracker.track(ev.Log("", f"{step}: Projecting parameters: {problem_status}"))
@@ -177,10 +203,10 @@ class ZeroInitPredictor(InitPred):
                     predictor.zero_grad()
                     e_hat, _ = predictor.forward(batch["d"])
                     batch_loss = loss_function(e_hat, batch["e"])
-                    batch_phi = predictor.get_phi(t)
+                    batch_phi = torch.nn.functional.relu(predictor.get_phi(t))
                     (batch_loss + batch_phi).backward()
                     theta_old = trans.get_flat_parameters(predictor.parameters())
-                    
+
                     grads = torch.hstack(
                         [
                             p.grad.flatten().clone()
@@ -190,18 +216,65 @@ class ZeroInitPredictor(InitPred):
                     ).reshape(-1, 1)
                     # tracker.track(ev.Log("", f"||grad||: {torch.linalg.norm(grads):.2f} \t phi: {batch_phi.item():.2f}"))
                     opt_pred.step()
-                    
+
                     theta = trans.get_flat_parameters(predictor.parameters())
                     num_backtracking_steps = 0
                     while not predictor.check_constraints():
-                        theta = alpha*theta + (1-alpha)*theta_old.clone()
+                        theta = alpha * theta + (1 - alpha) * theta_old.clone()
                         trans.set_vec_pars_to_model(predictor.parameters(), theta)
                         num_backtracking_steps += 1
                         if num_backtracking_steps > 100:
-                            tracker.track(ev.Log("", f"Backtracking failed after 100 steps"))
-                            trans.set_vec_pars_to_model(predictor.parameters(), theta_old)
-                            # return (None, predictor)
+                            tracker.track(
+                                ev.Log("", "Backtracking failed after 100 steps")
+                            )
+                            trans.set_vec_pars_to_model(
+                                predictor.parameters(), theta_old
+                            )
+                            return (None, predictor)
                     # tracker.track(ev.Log("", f"Backtracking steps: {num_backtracking_steps}"))
+
+                elif exp_config.ensure_constrained_method == "dual":
+
+                    predictor.zero_grad()
+                    e_hat, _ = predictor.forward(batch["d"])
+                    batch_loss = loss_function(e_hat, batch["e"])
+                    batch_phi = torch.tensor(0.0)
+                    for lam_i, F_i, ev_i in zip(
+                        dual_vars,
+                        predictor.sdp_constraints() + predictor.pointwise_constraints(),
+                        min_eigenvals,
+                    ):
+                        if len(F_i().shape) > 0:
+                            # min eigenvalue must be positive
+                            ev_i = -(torch.linalg.eigh(F_i()).eigenvalues[0] - 1e-3)
+                            # min_eigenvals.append(torch.nn.functional.relu(-torch.linalg.eigh(F_i()).eigenvalues[0]))
+                        else:
+                            ev_i = -F_i()
+                            # min_eigenvals.append(torch.nn.functional.relu(-F_i()))
+                        batch_phi += lam_i * ev_i
+                        # print(f'min eigenvalue: {min_eigenvals[-1]}')
+
+                    # print(f'batch loss: {batch_loss:.2f} \t batch phi: {batch_phi:.2f}')
+                    (batch_loss + batch_phi).backward()
+                    opt_pred.step()
+
+                    with torch.no_grad():
+                        for idx, (lam_i, min_eigenval) in enumerate(
+                            zip(dual_vars, min_eigenvals)
+                        ):
+                            dual_vars[idx] = torch.max(
+                                torch.tensor([lam_i - 0.01 * (-min_eigenval), 0])
+                            )
+
+                    grads = torch.hstack(
+                        [
+                            p.grad.flatten().clone()
+                            for p in predictor.parameters()
+                            if p.grad is not None
+                        ]
+                    ).reshape(-1, 1)
+
+                    # tracker.track(ev.Log("", f"{step}: \t Dual variable: {[np.round(lam_i.detach().numpy(),1) for lam_i in dual_vars]} \t Min eigvals: {[np.round(ev_i.detach().numpy(),1) for ev_i in min_eigenvals]}"))
 
                 else:
                     raise ValueError(
@@ -212,7 +285,10 @@ class ZeroInitPredictor(InitPred):
                 loss += batch_loss.item()
                 phi += batch_phi.item()
 
-            if not predictor.check_constraints():
+            if (
+                not predictor.check_constraints()
+                and not exp_config.ensure_constrained_method == "dual"
+            ):
                 problem_status = predictor.project_parameters()
                 tracker.track(ev.Log("", f"Projecting parameters: {problem_status}"))
                 predictor.set_lure_system()
@@ -225,7 +301,8 @@ class ZeroInitPredictor(InitPred):
 
             tracker.track(
                 ev.Log(
-                    "", f"{epoch}/{exp_config.epochs}\t l= {loss:.2f} \t val l= {val_loss:.2f} \t #projections= {projection_counter} \t backtracking steps= {num_backtracking_steps} \t ||grad||= {torch.linalg.norm(grads):.2f} \t phi= {phi:.2f}"
+                    "",
+                    f"{epoch}/{exp_config.epochs}\t l= {loss:.2f} \t val l= {val_loss:.2f} \t #projections= {projection_counter} \t backtracking steps= {num_backtracking_steps} \t ||grad||= {torch.linalg.norm(grads):.2f} \t phi= {phi:.2f} \t mean dual var={torch.mean(torch.tensor(dual_vars)):.2f} \t max ev: {torch.max(torch.tensor(min_eigenvals)):.2f}",
                 )
             )
             tracker.track(
@@ -240,27 +317,15 @@ class ZeroInitPredictor(InitPred):
                 )
             )
 
-            # if sch_pred is not None:
-            #     sch_pred.step(loss)
-
-
             if steps_without_improvement > increase_after_epochs:
                 # increase t
                 t = t * increase_rate
                 tracker.track(ev.Log("", f"Increase t by {increase_rate} to {t}"))
                 # decrease lr
                 for param_group in opt_pred.param_groups:
-                    lr = param_group["lr"] * 1/4
+                    lr = param_group["lr"] * 1 / 4
                     param_group["lr"] = lr
                 tracker.track(ev.Log("", f"Decrease lr by {decrease_rate} to {lr}"))
                 steps_without_improvement = 0
 
-
-            # if (epoch + 1) % increase_after_epochs == 0:
-            #     t = t * increase_rate
-            #     tracker.track(ev.Log("", f"Increase t by {increase_rate} to {t}"))
-
         return (None, predictor)
-    
-
-    

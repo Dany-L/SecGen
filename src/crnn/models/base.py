@@ -53,13 +53,13 @@ class DynamicIdentificationModel(ABC):
 
     def set_lure_system(self) -> LureSystemClass:
         lure_matrices = get_lure_matrices(
-                torch.zeros(
-                    size=(self.nx + self.ne + self.nw, self.nx + self.nd + self.nz)
-                ),
-                self.nx,
-                self.nd,
-                self.ne,
-            )
+            torch.zeros(
+                size=(self.nx + self.ne + self.nw, self.nx + self.nd + self.nz)
+            ),
+            self.nx,
+            self.nd,
+            self.ne,
+        )
         self.lure = LureSystem(lure_matrices)
         return lure_matrices
 
@@ -80,7 +80,9 @@ class DynamicIdentificationModel(ABC):
     def check_constraints(self) -> bool:
         return True
 
-    def get_phi(self, t: float, theta: Optional[ArrayLike] = None) -> Union[torch.Tensor, Array]:
+    def get_phi(
+        self, t: float, theta: Optional[ArrayLike] = None
+    ) -> Union[torch.Tensor, Array]:
         return torch.tensor(0.0)
 
     @abstractmethod
@@ -173,9 +175,7 @@ class LureSystem(Linear):
         for k in range(N):
             w = self.Delta(self.C2 @ x + self.D21 @ d[:, k, :, :])
             x = super().state_dynamics(x=x, u=d[:, k, :, :]) + self.B2 @ w
-            y[:, k, :, :] = (
-                super().output_dynamics(x=x, u=d[:, k, :, :]) + self.D12 @ w
-            )
+            y[:, k, :, :] = super().output_dynamics(x=x, u=d[:, k, :, :]) + self.D12 @ w
 
         return (y, x)
 

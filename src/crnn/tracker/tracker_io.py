@@ -2,6 +2,7 @@ from typing import Dict, List, Literal
 from ..configuration.experiment import BaseTrackerConfig
 from .base import BaseTracker, retrieve_tracker_class
 
+
 def get_trackers_from_config(
     config: Dict[str, BaseTrackerConfig],
     result_directory: str,

@@ -1,11 +1,10 @@
-from typing import Callable, List, Literal, Optional, Tuple, Union
+from typing import Literal, Optional, Tuple, Union
 
 import torch
 
 from ...utils import transformation as trans
 from .. import base
 from . import base as base_torch
-from jax import Array
 from jax.typing import ArrayLike
 
 
@@ -163,10 +162,7 @@ class BasicLtiRnn(base_torch.ConstrainedModule):
     def check_constraints(self) -> bool:
         return True
 
-    def sdp_constraints(self) -> List[Callable]:
-        pass
-
-    def initialize_parameters(self) -> None:
+    def initialize_parameters(self) -> str:
         return "standard initialization of parameters"
 
     def project_parameters(self) -> None:
