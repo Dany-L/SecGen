@@ -102,7 +102,11 @@ class ConstrainedModule(DynamicIdentificationModel):
         # check if constraints are psd
         with torch.no_grad():
             for lmi in self.sdp_constraints():
+                # min_ev = torch.linalg.eigh(lmi()).eigenvalues[0]
+                # if min_ev < 0:
+                #     return False
                 _, info = torch.linalg.cholesky_ex(lmi())
+
                 if info > 0:
                     return False
 
@@ -114,17 +118,12 @@ class ConstrainedModule(DynamicIdentificationModel):
     def get_phi(
         self, t: float, theta: Optional[ArrayLike] = None
     ) -> Union[torch.Tensor, Array]:
-        if self.sdp_constraints() is not None:
-            batch_phi = (
-                1
-                / t
-                * torch.sum(
-                    torch.tensor([-torch.logdet(M()) for M in self.sdp_constraints()])
-                )
-            )
-        else:
-            batch_phi = torch.tensor(0.0)
-        return batch_phi
+        phi = torch.tensor(0.0)
+        for F_i in self.sdp_constraints():
+            phi += -torch.logdet(F_i())
+        for F_i in self.pointwise_constraints():
+            phi += -torch.log(F_i())
+        return 1/t * phi
 
 
 class StableConstrainedModule(ConstrainedModule):
@@ -242,7 +241,7 @@ class L2StableConstrainedModule(ConstrainedModule):
         if self.multiplier == "none":
             self.L = L
         elif self.multiplier == "diag":
-            self.L.value = torch.diag(L)
+            self.L.data = torch.diag(L)
         else:
             raise NotImplementedError(f"Unsupported multiplier: {self.multiplier}")
 

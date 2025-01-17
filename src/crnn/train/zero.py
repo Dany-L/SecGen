@@ -203,6 +203,7 @@ class ZeroInitPredictor(InitPred):
                     predictor.zero_grad()
                     e_hat, _ = predictor.forward(batch["d"])
                     batch_loss = loss_function(e_hat, batch["e"])
+                    phi_raw = predictor.get_phi(t)
                     batch_phi = torch.nn.functional.relu(predictor.get_phi(t))
                     (batch_loss + batch_phi).backward()
                     theta_old = trans.get_flat_parameters(predictor.parameters())
@@ -239,19 +240,19 @@ class ZeroInitPredictor(InitPred):
                     e_hat, _ = predictor.forward(batch["d"])
                     batch_loss = loss_function(e_hat, batch["e"])
                     batch_phi = torch.tensor(0.0)
-                    for lam_i, F_i, ev_i in zip(
+                    for idx, (lam_i, F_i) in enumerate(zip(
                         dual_vars,
-                        predictor.sdp_constraints() + predictor.pointwise_constraints(),
-                        min_eigenvals,
-                    ):
+                        predictor.sdp_constraints() + predictor.pointwise_constraints()
+                    )):
                         if len(F_i().shape) > 0:
                             # min eigenvalue must be positive
-                            ev_i = -(torch.linalg.eigh(F_i()).eigenvalues[0] - 1e-3)
+                            # min_eigenvals[idx] = -(torch.linalg.eigh(F_i()).eigenvalues[0] - 1e-3)
+                            min_eigenvals[idx] = -(torch.min(torch.real(torch.linalg.eig(F_i())[0]))-1e-3)
                             # min_eigenvals.append(torch.nn.functional.relu(-torch.linalg.eigh(F_i()).eigenvalues[0]))
                         else:
-                            ev_i = -F_i()
+                            min_eigenvals[idx] = -F_i()
                             # min_eigenvals.append(torch.nn.functional.relu(-F_i()))
-                        batch_phi += lam_i * ev_i
+                        batch_phi += lam_i * min_eigenvals[idx]
                         # print(f'min eigenvalue: {min_eigenvals[-1]}')
 
                     # print(f'batch loss: {batch_loss:.2f} \t batch phi: {batch_phi:.2f}')
