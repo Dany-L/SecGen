@@ -11,6 +11,7 @@ from .models.torch import base as base_torch
 from .models.torch import recurrent as recurrent_torch
 from .tracker import events as ev
 from .tracker.base import AggregatedTracker
+from .utils.base import get_sequence_norm
 
 
 class AdditionalTestConfig(BaseModel):
@@ -121,7 +122,7 @@ class InputOutputStabilityL2(AdditionalTest):
         for epoch in range(self.epochs):
             opt.zero_grad()
             e_hat, _ = self.model.forward(d, x0)
-            ga_2 = self.get_sequence_norm(e_hat) / self.get_sequence_norm(d)
+            ga_2 = get_sequence_norm(e_hat) / get_sequence_norm(d)
             ga_2.backward(retain_graph=True)
             opt.step()
 
@@ -148,12 +149,6 @@ class InputOutputStabilityL2(AdditionalTest):
             ],
             {},
         )
-
-    def get_sequence_norm(self, seq: torch.Tensor) -> torch.Tensor:
-        seq_norm = torch.tensor(0.0)
-        for x_k in seq[0, :, :]:
-            seq_norm += torch.linalg.norm(x_k, ord=2) ** 2
-        return seq_norm
 
 
 def get_x0(

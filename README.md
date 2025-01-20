@@ -51,3 +51,9 @@ In `utils/plot.py` we use the package [tikzplotlib](https://pypi.org/project/tik
 
 ## mosek
 For finding initial parameters and projecting the updated parameter if they are infeasible we use [mosek](https://www.mosek.com/) in the [cvxpy](https://www.cvxpy.org/index.html) package. Other solver like `cp.SCS` should also work and can be configured in `ConstrainedModuleConfig.sdp_opt`.
+
+## torch
+on newer torch versions the `load_state_dict` requires the `weights_only=True` property in `src/models/base.py`
+```
+model.load_state_dict(torch.load(model_file_name, weights_only=True))
+```

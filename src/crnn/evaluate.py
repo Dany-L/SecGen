@@ -98,6 +98,7 @@ def evaluate(
         mode,
         additional_tests,
         dataset_name,
+        experiment_config.dt,
         tracker,
     )
     stop_time = time.time()
@@ -115,6 +116,7 @@ def evaluate_model(
     mode: Literal["test", "validation"],
     additional_tests: Dict[str, AdditionalTest],
     dataset_name: str,
+    dt: float,
     tracker: AggregatedTracker = AggregatedTracker(),
 ) -> None:
     initializer, predictor = models
@@ -196,7 +198,7 @@ def evaluate_model(
         ev.SaveFig(
             "",
             plot.plot_sequence(
-                [es[0], e_hats[0]], 0.01, f"RMSE {np.mean(e):.2f}", ["e", "e_hat"]
+                [es[0], e_hats[0]], dt, f"RMSE {np.mean(e):.2f}", ["e", "e_hat"]
             ),
             "test_output",
         )

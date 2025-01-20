@@ -240,14 +240,19 @@ class ZeroInitPredictor(InitPred):
                     e_hat, _ = predictor.forward(batch["d"])
                     batch_loss = loss_function(e_hat, batch["e"])
                     batch_phi = torch.tensor(0.0)
-                    for idx, (lam_i, F_i) in enumerate(zip(
-                        dual_vars,
-                        predictor.sdp_constraints() + predictor.pointwise_constraints()
-                    )):
+                    for idx, (lam_i, F_i) in enumerate(
+                        zip(
+                            dual_vars,
+                            predictor.sdp_constraints()
+                            + predictor.pointwise_constraints(),
+                        )
+                    ):
                         if len(F_i().shape) > 0:
                             # min eigenvalue must be positive
                             # min_eigenvals[idx] = -(torch.linalg.eigh(F_i()).eigenvalues[0] - 1e-3)
-                            min_eigenvals[idx] = -(torch.min(torch.real(torch.linalg.eig(F_i())[0]))-1e-3)
+                            min_eigenvals[idx] = -(
+                                torch.min(torch.real(torch.linalg.eig(F_i())[0])) - 1e-3
+                            )
                             # min_eigenvals.append(torch.nn.functional.relu(-torch.linalg.eigh(F_i()).eigenvalues[0]))
                         else:
                             min_eigenvals[idx] = -F_i()

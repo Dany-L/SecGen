@@ -11,8 +11,9 @@ test_file_name = '~/coupled-msd/data/coupled-msd-routine/processed/test/0093_sim
 
 
 % model_names = {'tanh','dzn','dznGen'};
-model_names = {'tanh'};
+model_names = {'sat'};
 results = cell(length(model_names));
+results_wc =cell(length(model_names));
 for model_idx =1:length(model_names)
     model_name = model_names{model_idx};
     fprintf('---%s---\n', model_name)
@@ -27,6 +28,15 @@ for model_idx =1:length(model_names)
     experiment_cfg =jsondecode(fileread(fullfile(result_directory,e_m_name,experiment_config_file_name)));
     normalization = jsondecode(fileread(fullfile(result_directory,e_m_name,'normalization.json')));
     validation_log_file = fullfile(result_directory,e_m_name,'validation.log');
+
+    switch model_cfg.nonlinearity
+        case 'sat'
+            nl = @sat;
+        case 'tanh'
+            nl = @tanh;
+        case 'dzn'
+            nl = @dzn;
+    end
 
     h = experiment_cfg.horizons.testing;dt = experiment_cfg.dt; w=experiment_cfg.window;
     tab = readtable(test_file_name);
@@ -138,9 +148,18 @@ for model_idx =1:length(model_names)
             
 
     %% simulate
-    e_hat_n = d_sim(sys, d_n, zeros(nx,1), @tanh);
+    e_hat_n = d_sim(sys, d_n, zeros(nx,1), nl);
     e_hat = e_hat_n .* normalization.output_std + normalization.output_mean;
     results{model_idx} = e_hat;
+
+    %% simulate worst case amplification from lstm
+    wc_lstm_filename = '/Users/jack/coupled-msd/2024_12_12-cRnn/MSD-128-zero-dual-lstm/seq/test_output-stability_l2-coupled-msd-routine.mat';
+    wc_lstm = load(wc_lstm_filename);
+    d_n_wc = squeeze(wc_lstm.d);
+    e_hat_n_wc = d_sim(sys, d_n_wc, zeros(nx,1), nl);
+    fprintf('%s: ga= %f (lstm: ga= %f) \n',model_name, sqrt(norm(e_hat_n_wc)^2/norm(d_n_wc)^2), sqrt(norm(squeeze(wc_lstm.e_hat))^2/norm(d_n_wc)^2))
+    e_hat_wc = e_hat_n_wc .* normalization.output_std + normalization.output_mean;
+    results_wc{model_idx} = {e_hat_wc, squeeze(wc_lstm.e_hat)};
 
 end
 figure(), grid on, hold on
@@ -150,6 +169,16 @@ end
 plot(t,e', '--')
 plot(t,d', '--')
 legend([model_names, 'e', 'd'])
+
+
+for i =1:length(results_wc)
+    figure(), grid on, hold on
+    plot(results_wc{i}{1}')
+    plot(results_wc{i}{2}')
+    legend({model_names{i}, 'lstm'})
+    title(sprintf('%s: Worst case amplification from LSTM', model_names{i}))
+end
+
 
 
 

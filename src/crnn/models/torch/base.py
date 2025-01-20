@@ -123,7 +123,7 @@ class ConstrainedModule(DynamicIdentificationModel):
             phi += -torch.logdet(F_i())
         for F_i in self.pointwise_constraints():
             phi += -torch.log(F_i())
-        return 1/t * phi
+        return 1 / t * phi
 
 
 class StableConstrainedModule(ConstrainedModule):

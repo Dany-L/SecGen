@@ -55,3 +55,10 @@ def get_device(gpu: bool) -> torch.device:
     else:
         device = torch.device("cpu")
     return device
+
+
+def get_sequence_norm(seq: torch.Tensor) -> torch.Tensor:
+    seq_norm = torch.tensor(0.0)
+    for x_k in seq[0, :, :]:
+        seq_norm += torch.linalg.norm(x_k, ord=2) ** 2
+    return seq_norm
