@@ -207,10 +207,10 @@ class L2StableConstrainedModule(ConstrainedModule):
         # self.ga2 = torch.nn.Parameter(torch.tensor([[config.ga2]]), requires_grad=False)
         self.ga2 = torch.tensor([[config.ga2]])
 
-        for n, p in self.named_parameters():
-            if p.requires_grad and not (n == "X" or n == "L"):
-                # torch.nn.init.normal_(p, mean=0.0, std=1/self.nx)
-                torch.nn.init.normal_(p, mean=0.0, std=1)
+        # for n, p in self.named_parameters():
+        #     if p.requires_grad and not (n == "X" or n == "L"):
+        #         # torch.nn.init.normal_(p, mean=0.0, std=1/self.nx)
+        #         torch.nn.init.normal_(p, mean=0.0, std=1)
 
     def set_lure_system(self) -> base.LureSystemClass:
         X_inv = torch.linalg.inv(self.get_X())

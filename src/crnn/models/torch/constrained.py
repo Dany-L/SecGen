@@ -74,7 +74,7 @@ class ConstrainedLtiRnn(base_torch.L2StableConstrainedModule):
         D21_tilde = cp.Variable((self.nz, self.nd))
 
         L, multiplier_constraints = self.get_optimization_multiplier_and_constraints()
-        ga2 = self.ga2.data
+        ga2 = self.ga2.cpu().detach().numpy()
         # ga2 = cp.Variable((1, 1))
         if self.nd == 1:
             M11_22 = -ga2
