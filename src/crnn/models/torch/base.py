@@ -4,9 +4,9 @@ import cvxpy as cp
 import numpy as np
 import torch
 import torch.nn as nn
-from numpy.typing import NDArray
 from jax import Array
 from jax.typing import ArrayLike
+from numpy.typing import NDArray
 
 from ...utils import transformation as trans
 from .. import base
@@ -204,7 +204,8 @@ class L2StableConstrainedModule(ConstrainedModule):
         # X = L @ L.T then ensures symmetry.
         self.Lx = torch.nn.Parameter(torch.eye(self.nx, self.nx))
 
-        self.ga2 = torch.nn.Parameter(torch.tensor([[config.ga2]]), requires_grad=False)
+        # self.ga2 = torch.nn.Parameter(torch.tensor([[config.ga2]]), requires_grad=False)
+        self.ga2 = torch.tensor([[config.ga2]])
 
         for n, p in self.named_parameters():
             if p.requires_grad and not (n == "X" or n == "L"):

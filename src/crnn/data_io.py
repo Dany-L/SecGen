@@ -9,12 +9,8 @@ import torch
 from numpy.typing import NDArray
 from scipy.io import loadmat, savemat
 
-from .configuration.base import (
-    DATASET_DIR_ENV_VAR,
-    InputOutput,
-    Normalization,
-    NormalizationParameters,
-)
+from .configuration.base import (DATASET_DIR_ENV_VAR, InputOutput,
+                                 Normalization, NormalizationParameters)
 from .models import base as base
 from .models.jax import base as base_jax
 from .models.jax.recurrent import get_matrices_from_flat_theta

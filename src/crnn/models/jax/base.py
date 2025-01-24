@@ -4,10 +4,10 @@ from typing import Callable, List, Literal, Optional, Tuple, Type, Union
 import cvxpy as cp
 import jax.numpy as jnp
 import numpy as np
+import torch
 from jax import Array, jit, random
 from jax.typing import ArrayLike
 from numpy.typing import NDArray
-import torch
 
 from .. import base as base
 

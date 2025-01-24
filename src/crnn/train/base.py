@@ -1,29 +1,28 @@
 import os
 import time
 from abc import ABC, abstractmethod
-from typing import Callable, Type, List, Optional, Tuple
+from typing import Callable, List, Optional, Tuple, Type
 
 import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib.figure import Figure
 import torch
+from matplotlib.figure import Figure
 from torch import nn
 from torch.optim import Optimizer, lr_scheduler
 from torch.utils.data import DataLoader
 
-from ..configuration.experiment import load_configuration, BaseExperimentConfig
+from ..configuration.experiment import BaseExperimentConfig, load_configuration
 from ..data_io import get_result_directory_name, load_data
 from ..datasets import get_datasets, get_loaders
 from ..loss import get_loss_function
-from ..models.model_io import get_model_from_config
 from ..models import base
+from ..models.model_io import get_model_from_config
 from ..optimizer import get_optimizer
 from ..scheduler import get_scheduler
 from ..tracker import events as ev
 from ..tracker.base import AggregatedTracker
 from ..tracker.tracker_io import get_trackers_from_config
 from ..utils import base as utils
-
 
 PLOT_AFTER_EPOCHS: int = 100
 

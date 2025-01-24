@@ -121,6 +121,15 @@
             "parameters": {
                 "nonlinearity": "deadzone"
             }
+        },
+        {
+            "m_short_name" : "satGen",
+            "m_class": "crnn.models.torch.constrained.ConstrainedLtiRnnGeneralSectorConditionsTransformed",
+            "parameters": {
+                "nonlinearity": "sat",
+                "multiplier": "diag",
+                "ga2": 10
+            }
         }
     ]
 }

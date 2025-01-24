@@ -1,11 +1,11 @@
 from typing import Literal, Optional, Tuple, Union
 
 import torch
+from jax.typing import ArrayLike
 
 from ...utils import transformation as trans
 from .. import base
 from . import base as base_torch
-from jax.typing import ArrayLike
 
 
 class BasicRnnConfig(base_torch.DynamicIdentificationConfig):

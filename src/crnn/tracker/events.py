@@ -5,7 +5,7 @@ from matplotlib.figure import Figure
 
 from ..configuration.base import InputOutput, NormalizationParameters
 from ..models.base import DynamicIdentificationModel
-from .base import TrackerConfig, Event
+from .base import Event, TrackerConfig
 
 
 @dataclasses.dataclass

@@ -1,4 +1,4 @@
-from typing import List, Iterator
+from typing import Iterator, List
 
 import jax.numpy as jnp
 import numpy as np

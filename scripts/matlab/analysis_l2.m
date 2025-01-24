@@ -1,7 +1,7 @@
 clear all, close all,
 %%
 
-experiment_name = 'MSD-16-zero-dual';
+experiment_name = 'MSD-8-zero-dual';
 
 result_directory = '~/coupled-msd/2024_12_12-cRnn';
 test_file_name = '~/coupled-msd/data/coupled-msd-routine/processed/test/0093_simulation_T_1500.csv';
@@ -11,7 +11,7 @@ test_file_name = '~/coupled-msd/data/coupled-msd-routine/processed/test/0093_sim
 
 
 % model_names = {'tanh','dzn','dznGen'};
-model_names = {'sat'};
+model_names = {'satGen'};
 results = cell(length(model_names));
 results_wc =cell(length(model_names));
 for model_idx =1:length(model_names)
@@ -31,12 +31,19 @@ for model_idx =1:length(model_names)
 
     switch model_cfg.nonlinearity
         case 'sat'
-            nl = @sat;
+            varphi = @sat;
         case 'tanh'
-            nl = @tanh;
+            varphi = @tanh;
         case 'dzn'
-            nl = @dzn;
+            varphi = @dzn;
     end
+
+    varphi_tilde = @(x) varphi(x) -x;
+    % x = -5:0.1:5;
+    % figure(), grid on, hold on
+    % plot(x, varphi(x))
+    % plot(x, varphi_tilde(x))
+
 
     h = experiment_cfg.horizons.testing;dt = experiment_cfg.dt; w=experiment_cfg.window;
     tab = readtable(test_file_name);
@@ -47,7 +54,7 @@ for model_idx =1:length(model_names)
     e = e(w+1:w+h,:);
     t = linspace(0, (h-1)*dt, h);
 
-    a=0;b=1;   
+    a=-1;b=0;   
 
     load(fullfile(result_directory,e_m_name, parameter_file_name))
 
@@ -96,49 +103,16 @@ for model_idx =1:length(model_names)
 
     sys = struct('A', A, 'B', B, 'B2', B2, 'C', C, 'D', D, 'D12', D12, 'C2', C2, 'D21', D21);
 %     sys = struct('A', A, 'B', zeros(nx,nd), 'B2', B2, 'C', zeros(ne,nx), 'D', zeros(ne,nd), 'D12', zeros(ne,nw), 'C2', C2, 'D21', zeros(nz,nd))
-
+    A_tilde = (A+B2*C2);
+    B_tilde = (B+B2*D21);
+    C_tilde = (C+ D12*C2);
+    D_tilde = (D+ D12*D21);
+    sys_tilde = struct('A', A_tilde, 'B', B_tilde, 'B2', B2, 'C', C_tilde, 'D', D_tilde, 'D12', D12, 'C2', C2, 'D21', D21);
 
     %% find an upper bound on the l2 gain
-    eps=1e-5;
 
-    X = sdpvar(nx,nx);
-    lambda = sdpvar(nw,1);
-    ga2 = sdpvar(1,1);
-    
-    L1 = [eye(nx),zeros(nx,nd), zeros(nx,nw);
-        A, B, B2];
-    L2 = [zeros(nd,nx), eye(nd), zeros(nd,nw);
-        C, D, D12];
-
-    if b_gen
-        L3 = [zeros(nw,nx), zeros(nw,nd), eye(nw);
-            C2-H, D21, zeros(nz,nw)];
-        add_constr = ([-X, H';H, -eye(nx)]<= -eps*eye(2*nx));
-    else
-        L3 = [zeros(nw,nx),zeros(nw,nd) eye(nw);
-            C2, D21, zeros(nz,nw)];
-        add_constr = [];
-    end
-
-    P_r = [-eye(nw) b*eye(nw); eye(nw) -a*eye(nw)];
-    L = diag(lambda); % can be replaced by diag multiplier
-    P = P_r' * [zeros(nw,nw), L'; L, zeros(nw,nw)] * P_r;
-
-    lmis = [];
-    lmi = L1' * [-X, zeros(nx,nx); zeros(nx,nx), X] * L1 + ...
-        L2' * [-ga2*eye(nd), zeros(nd,ne); zeros(ne,nd), eye(ne)] * L2 + ...
-        L3' * P * L3;
-
-    lmis = lmis + (lmi <= -eps * eye(size(L1,2)));
-    lmis = lmis + (X >= eps*eye(nx));
-    lmis = lmis + add_constr;
-     
-    sol = optimize(lmis, [], sdpsettings('solver','MOSEK','verbose', 0));
-    if sol.problem == 0
-        fprintf('parameters have optimal gamma: %g \n', sqrt(double(ga2)))
-    else
-        fprintf('Trained parameters are not feasible: %s \n', sol.info)
-    end
+    fprintf('std sector conditions - ga: %f\n', analyze_system(sys,0,1,false))
+    fprintf('gen sector conditions - ga: %f\n', analyze_system(sys_tilde,-1,0,true))
 
     % write l2 gain to validation log
 %     fid = fopen(validation_log_file,'a+');
@@ -148,7 +122,9 @@ for model_idx =1:length(model_names)
             
 
     %% simulate
-    e_hat_n = d_sim(sys, d_n, zeros(nx,1), nl);
+    e_hat_n_cmp = d_sim(sys, d_n, zeros(nx,1), varphi);
+    e_hat_n = d_sim(sys_tilde, d_n, zeros(nx,1), varphi_tilde);
+    assert(norm(e_hat_n - e_hat_n_cmp) < 1e-5)
     e_hat = e_hat_n .* normalization.output_std + normalization.output_mean;
     results{model_idx} = e_hat;
 
@@ -156,7 +132,8 @@ for model_idx =1:length(model_names)
     wc_lstm_filename = '/Users/jack/coupled-msd/2024_12_12-cRnn/MSD-128-zero-dual-lstm/seq/test_output-stability_l2-coupled-msd-routine.mat';
     wc_lstm = load(wc_lstm_filename);
     d_n_wc = squeeze(wc_lstm.d);
-    e_hat_n_wc = d_sim(sys, d_n_wc, zeros(nx,1), nl);
+    % e_hat_n_wc = d_sim(sys, d_n_wc, zeros(nx,1), varphi);
+    e_hat_n_wc = d_sim(sys_tilde, d_n_wc, zeros(nx,1), varphi_tilde);
     fprintf('%s: ga= %f (lstm: ga= %f) \n',model_name, sqrt(norm(e_hat_n_wc)^2/norm(d_n_wc)^2), sqrt(norm(squeeze(wc_lstm.e_hat))^2/norm(d_n_wc)^2))
     e_hat_wc = e_hat_n_wc .* normalization.output_std + normalization.output_mean;
     results_wc{model_idx} = {e_hat_wc, squeeze(wc_lstm.e_hat)};

@@ -203,8 +203,8 @@ class ZeroInitPredictor(InitPred):
                     predictor.zero_grad()
                     e_hat, _ = predictor.forward(batch["d"])
                     batch_loss = loss_function(e_hat, batch["e"])
-                    phi_raw = predictor.get_phi(t)
-                    batch_phi = torch.nn.functional.relu(predictor.get_phi(t))
+                    # batch_phi = torch.nn.functional.relu(predictor.get_phi(t))
+                    batch_phi = predictor.get_phi(t)
                     (batch_loss + batch_phi).backward()
                     theta_old = trans.get_flat_parameters(predictor.parameters())
 
