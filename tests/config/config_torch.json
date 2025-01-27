@@ -128,7 +128,19 @@
             "parameters": {
                 "nonlinearity": "sat",
                 "multiplier": "diag",
-                "ga2": 10
+                "ga2": 10,
+                "init_std": 0.1
+            }
+        },
+        {
+            "m_short_name" : "satGen",
+            "m_class": "crnn.models.torch.constrained.ConstrainedLtiRnnGeneralSectorConditionsTransformed",
+            "parameters": {
+                "nonlinearity": "sat",
+                "multiplier": "diag",
+                "ga2": 10,
+                "init_type": "zero",
+                "init_std": 1
             }
         }
     ]

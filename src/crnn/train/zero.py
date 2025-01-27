@@ -262,6 +262,9 @@ class ZeroInitPredictor(InitPred):
 
                     # print(f'batch loss: {batch_loss:.2f} \t batch phi: {batch_phi:.2f}')
                     (batch_loss + batch_phi).backward()
+
+                    # torch.nn.utils.clip_grad_norm_(predictor.parameters(),1.0)
+
                     opt_pred.step()
 
                     with torch.no_grad():

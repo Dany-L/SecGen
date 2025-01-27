@@ -131,8 +131,10 @@ class ConstrainedLtiRnnGeneralSectorConditions(base_torch.L2StableConstrainedMod
 
     def __init__(self, config: base_torch.ConstrainedModuleConfig) -> None:
         super().__init__(config)
+        # assumes sector bounds alpha = 0 and beta = 1
+        # this leads to P = [[-(Lambda + Lambda.T), Lambda], [Lambda.T, 0]]
         # self.tracker = tracker
-        self.H = torch.zeros((self.nz, self.nx))
+        self.H = torch.nn.Parameter(torch.zeros((self.nz, self.nx)))
 
     def pointwise_constraints(self) -> List[Callable]:
         constraint_fcn: List[Callable] = []
@@ -147,13 +149,13 @@ class ConstrainedLtiRnnGeneralSectorConditions(base_torch.L2StableConstrainedMod
             X = self.get_X()
             M11 = trans.torch_bmat(
                 [
-                    [-X, torch.zeros((self.nx, self.nd)), (self.C2_tilde - self.H).T],
+                    [-X, torch.zeros((self.nx, self.nd)), self.C2_tilde.T],
                     [
                         torch.zeros((self.nd, self.nx)),
                         -self.ga2 * torch.eye(self.nd),
                         self.D21_tilde.T,
                     ],
-                    [self.C2_tilde - self.H, self.D21_tilde, -2 * L],
+                    [self.C2_tilde, self.D21_tilde, -2 * L],
                 ]
             )
             M21 = trans.torch_bmat(
@@ -180,6 +182,24 @@ class ConstrainedLtiRnnGeneralSectorConditions(base_torch.L2StableConstrainedMod
     def initialize_parameters(self) -> str:
         return self.project_parameters()
 
+    def set_lure_system(self) -> base.LureSystemClass:
+        X_inv = torch.linalg.inv(self.get_X())
+        A = X_inv @ self.A_tilde
+        B = X_inv @ self.B_tilde
+        B2 = X_inv @ self.B2_tilde
+
+        L_inv = torch.linalg.inv(self.get_L())
+        C2 = L_inv @ self.C2_tilde + self.H
+        D21 = L_inv @ self.D21_tilde
+
+        theta = trans.torch_bmat(
+            [[A, B, B2], [self.C, self.D, self.D12], [C2, D21, self.D22]]
+        )
+        sys = base.get_lure_matrices(theta, self.nx, self.nd, self.ne, self.nl)
+        self.lure = base.LureSystem(sys)
+
+        return sys
+
     def project_parameters(self) -> str:
         # set H to zero initially, this will automatically satisfy the constraints
         X = cp.Variable((self.nx, self.nx), symmetric=True)
@@ -193,10 +213,11 @@ class ConstrainedLtiRnnGeneralSectorConditions(base_torch.L2StableConstrainedMod
         D12 = cp.Variable((self.ne, self.nw))
 
         C2_tilde = cp.Variable((self.nz, self.nx))
+        H = cp.Variable((self.nz, self.nx))
         D21_tilde = cp.Variable((self.nz, self.nd))
 
         L, multiplier_constraints = self.get_optimization_multiplier_and_constraints()
-        ga2 = self.ga2.data
+        ga2 = self.ga2.cpu().detach().numpy()
         # ga2 = cp.Variable((1, 1))
         if self.nd == 1:
             M11_22 = -ga2
@@ -220,11 +241,16 @@ class ConstrainedLtiRnnGeneralSectorConditions(base_torch.L2StableConstrainedMod
         M0 = -self.sdp_constraints()[0]().cpu().detach().numpy()
         nM = M.shape[0]
 
+        M_gen = cp.bmat([[-np.eye(self.nz), H.T], [H, -X]])
+        M_gen0 = -self.sdp_constraints()[1]().cpu().detach().numpy()
+        nM_gen = M_gen.shape[0]
+
         eps = 1e-3
         problem = cp.Problem(
-            cp.Minimize(cp.norm(M - M0)),
+            cp.Minimize(cp.norm(M - M0) + cp.norm(M_gen - M_gen0)),
             [
                 M << -eps * np.eye(nM),
+                M_gen << -eps * np.eye(nM_gen),
                 *multiplier_constraints,
             ],
         )
@@ -243,6 +269,7 @@ class ConstrainedLtiRnnGeneralSectorConditions(base_torch.L2StableConstrainedMod
         self.set_L(torch.tensor(utils.get_opt_values(L)))
 
         self.C2_tilde.data = torch.tensor(utils.get_opt_values(C2_tilde))
+        self.H.data = torch.tensor(utils.get_opt_values(H))
         self.D21_tilde.data = torch.tensor(utils.get_opt_values(D21_tilde))
 
         self.Lx.data = torch.tensor(np.linalg.cholesky(utils.get_opt_values(X)))
@@ -258,6 +285,8 @@ class ConstrainedLtiRnnGeneralSectorConditionsTransformed(
 
     def __init__(self, config: base_torch.ConstrainedModuleConfig) -> None:
         super().__init__(config)
+        # assumes sector bounds alpha = -1 and beta = 0
+        # this leads to P = [[-(Lambda + Lambda.T), -Lambda], [-Lambda.T, 0]]
         # transformation is designed for saturation nonlinearity
         assert isinstance(self.nl, nn.Hardtanh)
         self.H = nn.Parameter(torch.zeros((self.nz, self.nx)))
@@ -272,10 +301,10 @@ class ConstrainedLtiRnnGeneralSectorConditionsTransformed(
         C2 = L_inv @ self.C2_tilde + self.H
         D21 = L_inv @ self.D21_tilde
 
-        A_bar = A + B2 @ C2
-        B_bar = B + B2 @ D21
-        C_bar = self.C + self.D12 @ C2
-        D_bar = self.D + self.D12 @ D21
+        A_bar = A - B2 @ C2
+        B_bar = B - B2 @ D21
+        C_bar = self.C - self.D12 @ C2
+        D_bar = self.D - self.D12 @ D21
 
         theta = trans.torch_bmat(
             [[A_bar, B_bar, B2], [C_bar, D_bar, self.D12], [C2, D21, self.D22]]
@@ -349,7 +378,7 @@ class ConstrainedLtiRnnGeneralSectorConditionsTransformed(
         D21_tilde = cp.Variable((self.nz, self.nd))
 
         L, multiplier_constraints = self.get_optimization_multiplier_and_constraints()
-        ga2 = self.ga2.data
+        ga2 = self.ga2.cpu().detach().numpy()
         # ga2 = cp.Variable((1, 1))
         if self.nd == 1:
             M11_22 = -ga2

@@ -1,7 +1,7 @@
 clear all, close all,
 %%
 
-experiment_name = 'MSD-8-zero-dual';
+experiment_name = 'MSD-16-zero-dual';
 
 result_directory = '~/coupled-msd/2024_12_12-cRnn';
 test_file_name = '~/coupled-msd/data/coupled-msd-routine/processed/test/0093_simulation_T_1500.csv';
@@ -58,10 +58,8 @@ for model_idx =1:length(model_names)
 
     load(fullfile(result_directory,e_m_name, parameter_file_name))
 
-    if exist('H', 'var')
-        b_gen=true;
-    else
-        b_gen=false;
+    if not(exist('H', 'var'))
+        H = false;
     end
 
     %% load controller parameters
@@ -82,15 +80,21 @@ for model_idx =1:length(model_names)
     % ga2 = 0.001;
     ga2 = model_cfg.ga2;
     X = Lx * Lx';
-    M11_orig = [-X,zeros(nx,nd), C2_tilde';
-        zeros(nd,nx), -ga2*eye(nd), D21_tilde';
-        C2_tilde, D21_tilde, -2*L];
+    M11_orig = [-X,zeros(nx,nd), -C2_tilde';
+        zeros(nd,nx), -ga2*eye(nd), -D21_tilde';
+        -C2_tilde, -D21_tilde, -2*L];
     M21_orig = [A_tilde, B_tilde, B2_tilde;
         C, D, D12];
     M22_orig = [-X, zeros(nx,ne);
         zeros(ne,nx), -eye(ne)];
     M_orig = [M11_orig, M21_orig';M21_orig, M22_orig];
-    fprintf('max real eig M_orig: %f\n',max(real(eig(M_orig))))
+
+    if not(H==false)
+        M_gen = [-X, H';H, -eye(nz)];
+        fprintf('max real eig M_orig: %f, max real eig M_gen: %f\n',max(real(eig(M_orig))), max(real(eig(M_gen))))
+    else
+        fprintf('max real eig M_orig: %f\n',max(real(eig(M_orig))))
+    end
 
     X_inv = X^(-1);
     A = X_inv * A_tilde;
@@ -98,22 +102,24 @@ for model_idx =1:length(model_names)
     B2 = X_inv * B2_tilde;
 
     L_inv = L^(-1);
-    C2 = L_inv * C2_tilde;
+    C2 = L_inv * C2_tilde + H;
     D21 = L_inv * D21_tilde;
 
     sys = struct('A', A, 'B', B, 'B2', B2, 'C', C, 'D', D, 'D12', D12, 'C2', C2, 'D21', D21);
 %     sys = struct('A', A, 'B', zeros(nx,nd), 'B2', B2, 'C', zeros(ne,nx), 'D', zeros(ne,nd), 'D12', zeros(ne,nw), 'C2', C2, 'D21', zeros(nz,nd))
-    A_tilde = (A+B2*C2);
-    B_tilde = (B+B2*D21);
-    C_tilde = (C+ D12*C2);
-    D_tilde = (D+ D12*D21);
-    sys_tilde = struct('A', A_tilde, 'B', B_tilde, 'B2', B2, 'C', C_tilde, 'D', D_tilde, 'D12', D12, 'C2', C2, 'D21', D21);
+    A_bar = (A-B2*C2);
+    B_bar = (B-B2*D21);
+    C_bar = (C-D12*C2);
+    D_bar = (D-D12*D21);
+    sys_tilde = struct('A', A_bar, 'B', B_bar, 'B2', B2, 'C', C_bar, 'D', D_bar, 'D12', D12, 'C2', C2, 'D21', D21);
 
     %% find an upper bound on the l2 gain
 
-    fprintf('std sector conditions - ga: %f\n', analyze_system(sys,0,1,false))
-    fprintf('gen sector conditions - ga: %f\n', analyze_system(sys_tilde,-1,0,true))
-
+    fprintf('gen sector conditions\n')
+    analyze_system(sys,-1,1,H);
+    fprintf('std sector conditions\n')
+    analyze_system(sys_tilde,0,1,false);
+    
     % write l2 gain to validation log
 %     fid = fopen(validation_log_file,'a+');
 %     fprintf(fid,'l2 gain: %f\n',sqrt(double(ga2)));
@@ -122,8 +128,8 @@ for model_idx =1:length(model_names)
             
 
     %% simulate
-    e_hat_n_cmp = d_sim(sys, d_n, zeros(nx,1), varphi);
-    e_hat_n = d_sim(sys_tilde, d_n, zeros(nx,1), varphi_tilde);
+    e_hat_n_cmp = d_sim(sys, d_n, zeros(nx,1), varphi_tilde);
+    e_hat_n = d_sim(sys_tilde, d_n, zeros(nx,1), varphi);
     assert(norm(e_hat_n - e_hat_n_cmp) < 1e-5)
     e_hat = e_hat_n .* normalization.output_std + normalization.output_mean;
     results{model_idx} = e_hat;
@@ -148,13 +154,13 @@ plot(t,d', '--')
 legend([model_names, 'e', 'd'])
 
 
-for i =1:length(results_wc)
-    figure(), grid on, hold on
-    plot(results_wc{i}{1}')
-    plot(results_wc{i}{2}')
-    legend({model_names{i}, 'lstm'})
-    title(sprintf('%s: Worst case amplification from LSTM', model_names{i}))
-end
+% for i =1:length(results_wc)
+%     figure(), grid on, hold on
+%     plot(results_wc{i}{1}')
+%     plot(results_wc{i}{2}')
+%     legend({model_names{i}, 'lstm'})
+%     title(sprintf('%s: Worst case amplification from LSTM', model_names{i}))
+% end
 
 
 

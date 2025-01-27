@@ -32,6 +32,8 @@ class ConstrainedModuleConfig(DynamicIdentificationConfig):
     nonlinearity: Literal["tanh", "relu", "deadzone", "sat"] = "tanh"
     multiplier: Literal["none", "diag", "zf"] = "none"
     ga2: float = 1.0
+    init_type: Literal["rand", "zero"] = "rand"
+    init_std: float = 1.0
 
 
 class ConstrainedModule(DynamicIdentificationModel):
@@ -56,7 +58,7 @@ class ConstrainedModule(DynamicIdentificationModel):
         if self.multiplier == "none":
             self.L = torch.eye(self.nz)
         elif config.multiplier == "diag":
-            self.L = torch.nn.Parameter(torch.ones((self.nz,)))
+            self.L = torch.nn.Parameter(config.init_std * torch.ones((self.nz,)))
         else:
             raise NotImplementedError(f"Unsupported multiplier: {config.multiplier}")
 
@@ -202,15 +204,15 @@ class L2StableConstrainedModule(ConstrainedModule):
 
         # X is required to be symmetric. We use a lower triangular matrix as parameter.
         # X = L @ L.T then ensures symmetry.
-        self.Lx = torch.nn.Parameter(torch.eye(self.nx, self.nx))
+        self.Lx = torch.nn.Parameter(config.init_std * torch.eye(self.nx, self.nx))
 
         # self.ga2 = torch.nn.Parameter(torch.tensor([[config.ga2]]), requires_grad=False)
         self.ga2 = torch.tensor([[config.ga2]])
 
-        # for n, p in self.named_parameters():
-        #     if p.requires_grad and not (n == "X" or n == "L"):
-        #         # torch.nn.init.normal_(p, mean=0.0, std=1/self.nx)
-        #         torch.nn.init.normal_(p, mean=0.0, std=1)
+        if config.init_type == "rand":
+            for n, p in self.named_parameters():
+                if p.requires_grad and not (n == "X" or n == "L"):
+                    torch.nn.init.normal_(p, mean=0.0, std=config.init_std)
 
     def set_lure_system(self) -> base.LureSystemClass:
         X_inv = torch.linalg.inv(self.get_X())

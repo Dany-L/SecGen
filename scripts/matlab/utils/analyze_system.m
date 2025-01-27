@@ -1,4 +1,11 @@
-function l2_gain = analyze_system(sys, alpha, beta, b_gen)
+function l2_gain = analyze_system(sys, alpha, beta, H)
+    if H == false
+        b_gen = false;
+    else
+        b_gen= true;
+    end
+        
+
     nx = size(sys.A,2); nd = size(sys.B,2); nw = size(sys.B2,2); 
     ne = size(sys.C,1); nz = nw;
 
@@ -14,14 +21,13 @@ function l2_gain = analyze_system(sys, alpha, beta, b_gen)
     L2 = [zeros(nd,nx), eye(nd), zeros(nd,nw);
         sys.C, sys.D, sys.D12];
 
+    L3 = [zeros(nw,nx), zeros(nw,nd), eye(nw);
+            sys.C2, sys.D21, zeros(nz,nw)];
     if b_gen
-        H = sdpvar(nz,nx);
-        L3 = [zeros(nw,nx), zeros(nw,nd), eye(nw);
-            sys.C2-H, sys.D21, zeros(nz,nw)];
+        % H = sdpvar(nz,nx);
+        
         add_constr = ([-X, H';H, -eye(nx)]<= -eps*eye(2*nx));
     else
-        L3 = [zeros(nw,nx),zeros(nw,nd) eye(nw);
-            sys.C2, sys.D21, zeros(nz,nw)];
         add_constr = [];
     end
 
@@ -38,7 +44,7 @@ function l2_gain = analyze_system(sys, alpha, beta, b_gen)
     lmis = lmis + (X >= eps*eye(nx));
     lmis = lmis + add_constr;
      
-    sol = optimize(lmis, [], sdpsettings('solver','MOSEK','verbose', 0));
+    sol = optimize(lmis, ga2, sdpsettings('solver','MOSEK','verbose', 0));
     if sol.problem == 0
         fprintf('parameters have optimal gamma: %g \n', sqrt(double(ga2)))
     else

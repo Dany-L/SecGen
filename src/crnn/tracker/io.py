@@ -3,8 +3,12 @@ import os
 from datetime import datetime
 
 from ..configuration.base import FIG_FOLDER_NAME, SEQ_FOLDER_NAME
-from ..data_io import (save_input_output_to_mat, save_model,
-                       save_model_parameter, write_dict_to_json)
+from ..data_io import (
+    save_input_output_to_mat,
+    save_model,
+    save_model_parameter,
+    write_dict_to_json,
+)
 from ..utils import base as utils
 from ..utils import plot
 from . import events as ev

@@ -3,6 +3,7 @@ from typing import List, Optional
 
 import matplotlib.pyplot as plt
 import numpy as np
+
 # import tikzplotlib
 from matplotlib.figure import Figure
 from numpy.typing import NDArray
