@@ -1,9 +1,9 @@
 clear all, close all,
 %%
 
-experiment_name = 'MSD-16-zero-dual';
+experiment_name = 'MSD-16';
 
-result_directory = '~/coupled-msd/2024_12_12-cRnn';
+result_directory = '~/coupled-msd/2025_01_25-cRnn';
 test_file_name = '~/coupled-msd/data/coupled-msd-routine/processed/test/0093_simulation_T_1500.csv';
 
 % result_directory = '~/actuated_pendulum/results_local';
@@ -90,7 +90,7 @@ for model_idx =1:length(model_names)
     M_orig = [M11_orig, M21_orig';M21_orig, M22_orig];
 
     if not(H==false)
-        M_gen = [-X, H';H, -eye(nz)];
+        M_gen = [-eye(nz), H';H, -X];
         fprintf('max real eig M_orig: %f, max real eig M_gen: %f\n',max(real(eig(M_orig))), max(real(eig(M_gen))))
     else
         fprintf('max real eig M_orig: %f\n',max(real(eig(M_orig))))

@@ -353,7 +353,7 @@ class ConstrainedLtiRnnGeneralSectorConditionsTransformed(
 
         def general_sector() -> torch.Tensor:
             X = self.get_X()
-            return -trans.torch_bmat([[-torch.eye(self.nz), self.H.T], [self.H, -X]])
+            return -trans.torch_bmat([[-X, self.H.T], [self.H, -torch.eye(self.nz)]])
 
         return [stability_lmi, general_sector]
         # return [stability_lmi]
@@ -402,7 +402,7 @@ class ConstrainedLtiRnnGeneralSectorConditionsTransformed(
         M0 = -self.sdp_constraints()[0]().cpu().detach().numpy()
         nM = M.shape[0]
 
-        M_gen = cp.bmat([[-np.eye(self.nz), H.T], [H, -X]])
+        M_gen = cp.bmat([[-X, H.T], [H, -np.eye(self.nz)]])
         M_gen0 = -self.sdp_constraints()[1]().cpu().detach().numpy()
         nM_gen = M_gen.shape[0]
 

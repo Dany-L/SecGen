@@ -26,7 +26,7 @@ function l2_gain = analyze_system(sys, alpha, beta, H)
     if b_gen
         % H = sdpvar(nz,nx);
         
-        add_constr = ([-X, H';H, -eye(nx)]<= -eps*eye(2*nx));
+        add_constr = ([-X, H';H, -eye(nz)]<= -eps*eye(2*nx));
     else
         add_constr = [];
     end
@@ -44,7 +44,7 @@ function l2_gain = analyze_system(sys, alpha, beta, H)
     lmis = lmis + (X >= eps*eye(nx));
     lmis = lmis + add_constr;
      
-    sol = optimize(lmis, ga2, sdpsettings('solver','MOSEK','verbose', 0));
+    sol = optimize(lmis, [], sdpsettings('solver','MOSEK','verbose', 0));
     if sol.problem == 0
         fprintf('parameters have optimal gamma: %g \n', sqrt(double(ga2)))
     else
