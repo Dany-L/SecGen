@@ -1,7 +1,7 @@
 # utils.py
 from crnn.configuration.experiment import ExperimentConfig, ExperimentTemplate
 from typing import Dict, Any
-from crnn.train.base import train
+from crnn.train.base import train, continue_training
 from crnn.evaluate import evaluate
 from crnn.configuration.experiment import ExperimentConfig, ExperimentTemplate
 import itertools
@@ -24,6 +24,14 @@ def run_tests(
     for model_name, gpu in par:
         for experiment_name in experiment_names:
             train(
+                configuration_file,
+                data_directory,
+                result_directory,
+                model_name,
+                experiment_name,
+                gpu,
+            )
+            continue_training(
                 configuration_file,
                 data_directory,
                 result_directory,

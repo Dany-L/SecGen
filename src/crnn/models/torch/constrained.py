@@ -290,6 +290,10 @@ class ConstrainedLtiRnnGeneralSectorConditionsTransformed(
         # transformation is designed for saturation nonlinearity
         assert isinstance(self.nl, nn.Hardtanh)
         self.H = nn.Parameter(torch.zeros((self.nz, self.nx)))
+        if config.learn_H:
+            self.H.requires_grad = True
+        else:
+            self.H.requires_grad = False
 
     def set_lure_system(self) -> base.LureSystemClass:
         X_inv = torch.linalg.inv(self.get_X())
@@ -298,8 +302,8 @@ class ConstrainedLtiRnnGeneralSectorConditionsTransformed(
         B2 = X_inv @ self.B2_tilde
 
         L_inv = torch.linalg.inv(self.get_L())
-        C2 = L_inv @ self.C2_tilde + self.H
-        D21 = L_inv @ self.D21_tilde
+        C2 = -L_inv @ (self.C2_tilde + self.H)
+        D21 = -L_inv @ self.D21_tilde
 
         A_bar = A - B2 @ C2
         B_bar = B - B2 @ D21
@@ -327,13 +331,13 @@ class ConstrainedLtiRnnGeneralSectorConditionsTransformed(
             X = self.get_X()
             M11 = trans.torch_bmat(
                 [
-                    [-X, torch.zeros((self.nx, self.nd)), -self.C2_tilde.T],
+                    [-X, torch.zeros((self.nx, self.nd)), self.C2_tilde.T],
                     [
                         torch.zeros((self.nd, self.nx)),
                         -self.ga2 * torch.eye(self.nd),
-                        -self.D21_tilde.T,
+                        self.D21_tilde.T,
                     ],
-                    [-self.C2_tilde, -self.D21_tilde, -2 * L],
+                    [self.C2_tilde, self.D21_tilde, -2 * L],
                 ]
             )
             M21 = trans.torch_bmat(
@@ -386,9 +390,9 @@ class ConstrainedLtiRnnGeneralSectorConditionsTransformed(
             M11_22 = -ga2 * np.eye(self.nd)
         M11 = cp.bmat(
             [
-                [-X, np.zeros((self.nx, self.nd)), -C2_tilde.T],
-                [np.zeros((self.nd, self.nx)), M11_22, -D21_tilde.T],
-                [-C2_tilde, -D21_tilde, -2 * L],
+                [-X, np.zeros((self.nx, self.nd)), C2_tilde.T],
+                [np.zeros((self.nd, self.nx)), M11_22, D21_tilde.T],
+                [C2_tilde, D21_tilde, -2 * L],
             ]
         )
         M21 = cp.bmat([[A_tilde, B_tilde, B2_tilde], [C, D, D12]])

@@ -6,11 +6,8 @@ import numpy as np
 import torch
 
 from . import metrics
-from .additional_tests import (
-    AdditionalTest,
-    AdditionalTestResult,
-    retrieve_additional_test_class,
-)
+from .additional_tests import (AdditionalTest, AdditionalTestResult,
+                               retrieve_additional_test_class)
 from .configuration.base import InputOutput, Normalization
 from .configuration.experiment import load_configuration
 from .data_io import get_result_directory_name, load_data, load_normalization
@@ -70,7 +67,6 @@ def evaluate(
     )
 
     initializer, predictor = get_model_from_config(model_config)
-
     initializer, predictor = load_model(
         experiment_config, initializer, predictor, model_name, result_directory
     )

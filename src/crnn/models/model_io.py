@@ -30,6 +30,19 @@ def get_model_from_config(
     return (initializer, predictor)
 
 
+def set_parameters_to_train(
+    model: base.DynamicIdentificationModel, parameter_names: List
+) -> None:
+    if isinstance(model, base_jax.ConstrainedModule):
+        raise Warning("Not implemented for jax models.")
+    elif isinstance(model, base_torch.DynamicIdentificationModel):
+        for n, p in model.named_parameters():
+            if n in parameter_names:
+                p.requires_grad = False
+            else:
+                p.requires_grad = True
+
+
 def load_model(
     experiment_config: BaseExperimentConfig,
     initializer: base.DynamicIdentificationModel,

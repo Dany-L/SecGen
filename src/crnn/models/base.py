@@ -201,7 +201,7 @@ def get_lure_matrices(
     nx: int,  # state
     nd: int,  # input
     ne: int,  # output
-    nonlinearity: Optional[torch.nn.Module] = torch.nn.Tanh(),
+    nonlinearity: torch.nn.Module = torch.nn.Tanh(),
 ) -> LureSystemClass:
     A = gen_plant[:nx, :nx]
     B = gen_plant[:nx, nx : nx + nd]

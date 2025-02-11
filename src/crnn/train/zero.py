@@ -43,6 +43,7 @@ class ZeroInitPredictor(InitPred):
         schedulers: List[lr_scheduler.ReduceLROnPlateau],
         loss_function: nn.Module,
         tracker: AggregatedTracker = AggregatedTracker(),
+        initialize: bool = True,
     ) -> Tuple[Optional[base.DynamicIdentificationModel]]:
         train_loaders, validation_loaders = loaders
         _, train_loader = train_loaders
@@ -50,8 +51,9 @@ class ZeroInitPredictor(InitPred):
         _, predictor = models
         _, opt_pred = optimizers
         _, sch_pred = schedulers
-        status = predictor.initialize_parameters()
-        tracker.track(ev.Log("", f"Initialized predictor: {status}"))
+        if initialize:
+            status = predictor.initialize_parameters()
+            tracker.track(ev.Log("", f"Initialized predictor: {status}"))
         predictor.set_lure_system()
         # predictor.train()
         t, increase_rate, increase_after_epochs = (
@@ -260,7 +262,6 @@ class ZeroInitPredictor(InitPred):
                         batch_phi += lam_i * min_eigenvals[idx]
                         # print(f'min eigenvalue: {min_eigenvals[-1]}')
 
-                    # print(f'batch loss: {batch_loss:.2f} \t batch phi: {batch_phi:.2f}')
                     (batch_loss + batch_phi).backward()
 
                     # torch.nn.utils.clip_grad_norm_(predictor.parameters(),1.0)
@@ -282,6 +283,7 @@ class ZeroInitPredictor(InitPred):
                             if p.grad is not None
                         ]
                     ).reshape(-1, 1)
+                    # print(f'{step} \t batch loss: {batch_loss:.2f} \t batch phi: {batch_phi:.2f} \t norm grad: {torch.linalg.norm(grads):.2f}')
 
                     # tracker.track(ev.Log("", f"{step}: \t Dual variable: {[np.round(lam_i.detach().numpy(),1) for lam_i in dual_vars]} \t Min eigvals: {[np.round(ev_i.detach().numpy(),1) for ev_i in min_eigenvals]}"))
 

@@ -15,6 +15,5 @@ for w_idx =1:nw
         z_i = w_i+q;
     end
     z(w_idx) = z_i;
-
 end
 

@@ -41,10 +41,10 @@ function l2_gain = analyze_system(sys, alpha, beta, H)
         L3' * P * L3;
 
     lmis = lmis + (lmi <= -eps * eye(size(L1,2)));
-    lmis = lmis + (X >= eps*eye(nx));
+    % lmis = lmis + (X >= eps*eye(nx));
     lmis = lmis + add_constr;
      
-    sol = optimize(lmis, [], sdpsettings('solver','MOSEK','verbose', 0));
+    sol = optimize(lmis, ga2, sdpsettings('solver','MOSEK','verbose', 0));
     if sol.problem == 0
         fprintf('parameters have optimal gamma: %g \n', sqrt(double(ga2)))
     else

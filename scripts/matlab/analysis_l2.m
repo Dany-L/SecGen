@@ -1,9 +1,9 @@
 clear all, close all,
 %%
 
-experiment_name = 'MSD-16';
+experiment_name = 'MSD-8-zero-dual';
 
-result_directory = '~/coupled-msd/2025_01_25-cRnn';
+result_directory = '~/coupled-msd/2024_12_12-cRnn';
 test_file_name = '~/coupled-msd/data/coupled-msd-routine/processed/test/0093_simulation_T_1500.csv';
 
 % result_directory = '~/actuated_pendulum/results_local';
@@ -58,8 +58,10 @@ for model_idx =1:length(model_names)
 
     load(fullfile(result_directory,e_m_name, parameter_file_name))
 
+    b_gen=true;
     if not(exist('H', 'var'))
         H = false;
+        b_gen=false;
     end
 
     %% load controller parameters
@@ -80,9 +82,9 @@ for model_idx =1:length(model_names)
     % ga2 = 0.001;
     ga2 = model_cfg.ga2;
     X = Lx * Lx';
-    M11_orig = [-X,zeros(nx,nd), -C2_tilde';
-        zeros(nd,nx), -ga2*eye(nd), -D21_tilde';
-        -C2_tilde, -D21_tilde, -2*L];
+    M11_orig = [-X,zeros(nx,nd), C2_tilde';
+        zeros(nd,nx), -ga2*eye(nd), D21_tilde';
+        C2_tilde, D21_tilde, -2*L];
     M21_orig = [A_tilde, B_tilde, B2_tilde;
         C, D, D12];
     M22_orig = [-X, zeros(nx,ne);
@@ -102,8 +104,8 @@ for model_idx =1:length(model_names)
     B2 = X_inv * B2_tilde;
 
     L_inv = L^(-1);
-    C2 = L_inv * C2_tilde + H;
-    D21 = L_inv * D21_tilde;
+    C2 = -L_inv * (C2_tilde + H);
+    D21 = -L_inv * D21_tilde;
 
     sys = struct('A', A, 'B', B, 'B2', B2, 'C', C, 'D', D, 'D12', D12, 'C2', C2, 'D21', D21);
 %     sys = struct('A', A, 'B', zeros(nx,nd), 'B2', B2, 'C', zeros(ne,nx), 'D', zeros(ne,nd), 'D12', zeros(ne,nw), 'C2', C2, 'D21', zeros(nz,nd))
@@ -115,10 +117,7 @@ for model_idx =1:length(model_names)
 
     %% find an upper bound on the l2 gain
 
-    fprintf('gen sector conditions\n')
-    analyze_system(sys,-1,1,H);
-    fprintf('std sector conditions\n')
-    analyze_system(sys_tilde,0,1,false);
+
     
     % write l2 gain to validation log
 %     fid = fopen(validation_log_file,'a+');
@@ -128,9 +127,21 @@ for model_idx =1:length(model_names)
             
 
     %% simulate
-    e_hat_n_cmp = d_sim(sys, d_n, zeros(nx,1), varphi_tilde);
-    e_hat_n = d_sim(sys_tilde, d_n, zeros(nx,1), varphi);
-    assert(norm(e_hat_n - e_hat_n_cmp) < 1e-5)
+    if b_gen
+        fprintf('gen sector conditions\n')
+        analyze_system(sys,-1,1,H);
+        fprintf('std sector conditions\n')
+        analyze_system(sys_tilde,0,1,false);
+        e_hat_n_cmp = d_sim(sys, d_n, zeros(nx,1), varphi_tilde);
+        e_hat_n = d_sim(sys_tilde, d_n, zeros(nx,1), varphi);
+        assert(norm(e_hat_n - e_hat_n_cmp) < 1e-5)
+    else
+        fprintf('std sector conditions\n')
+        analyze_system(sys,0,1,false);
+        e_hat_n = d_sim(sys, d_n, zeros(nx,1), varphi);
+    end
+    
+    % e_hat = e_hat_n;
     e_hat = e_hat_n .* normalization.output_std + normalization.output_mean;
     results{model_idx} = e_hat;
 

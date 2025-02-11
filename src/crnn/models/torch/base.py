@@ -34,6 +34,7 @@ class ConstrainedModuleConfig(DynamicIdentificationConfig):
     ga2: float = 1.0
     init_type: Literal["rand", "zero"] = "rand"
     init_std: float = 1.0
+    learn_H: bool = False
 
 
 class ConstrainedModule(DynamicIdentificationModel):

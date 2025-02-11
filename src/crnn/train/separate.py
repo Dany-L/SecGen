@@ -27,6 +27,7 @@ class SeparateInitPredictor(InitPred):
         schedulers: List[lr_scheduler.ReduceLROnPlateau],
         loss_function: nn.Module,
         tracker: AggregatedTracker = AggregatedTracker(),
+        initialize: bool = True,
     ) -> Tuple[Optional[base.DynamicIdentificationModel]]:
         train_loaders, validation_loaders = loaders
         init_loader, pred_loader = train_loaders

@@ -3,12 +3,8 @@ import os
 from datetime import datetime
 
 from ..configuration.base import FIG_FOLDER_NAME, SEQ_FOLDER_NAME
-from ..data_io import (
-    save_input_output_to_mat,
-    save_model,
-    save_model_parameter,
-    write_dict_to_json,
-)
+from ..data_io import (save_input_output_to_mat, save_model,
+                       save_model_parameter, write_dict_to_json)
 from ..utils import base as utils
 from ..utils import plot
 from . import events as ev
@@ -64,7 +60,7 @@ class IoTracker(BaseTracker):
         elif isinstance(event, ev.SaveModelParameter):
             save_model_parameter(
                 event.model,
-                os.path.join(self.directory, f"model_params-{self.model_name}.mat"),
+                os.path.join(self.directory, f"model_params-{self.model_name}"),
             )
             self.write_to_logfile(
                 f"Save model parameters as mat file to {self.directory}"

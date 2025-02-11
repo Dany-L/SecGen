@@ -27,6 +27,7 @@ class JointInitPredictor(InitPred):
         loss_function: nn.Module,
         schedulers: List[lr_scheduler.ReduceLROnPlateau],
         tracker: AggregatedTracker = AggregatedTracker(),
+        initialize: bool = True,
     ) -> Tuple[Optional[base.DynamicIdentificationModel]]:
         train_loaders, validation_loaders = loaders
         _, train_loader = train_loaders
