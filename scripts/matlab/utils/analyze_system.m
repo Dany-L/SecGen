@@ -15,19 +15,22 @@ function l2_gain = analyze_system(sys, alpha, beta, H)
     X = sdpvar(nx,nx);
     lambda = sdpvar(nw,1);
     ga2 = sdpvar(1,1);
-    
+
     L1 = [eye(nx),zeros(nx,nd), zeros(nx,nw);
         sys.A, sys.B, sys.B2];
+    
     L2 = [zeros(nd,nx), eye(nd), zeros(nd,nw);
         sys.C, sys.D, sys.D12];
 
-    L3 = [zeros(nw,nx), zeros(nw,nd), eye(nw);
-            sys.C2, sys.D21, zeros(nz,nw)];
     if b_gen
         % H = sdpvar(nz,nx);
-        
+        L3 = [zeros(nw,nx), zeros(nw,nd), eye(nw);
+            sys.C2-H, sys.D21, zeros(nz,nw)];    
         add_constr = ([-X, H';H, -eye(nz)]<= -eps*eye(2*nx));
+        % add_constr = [];
     else
+        L3 = [zeros(nw,nx), zeros(nw,nd), eye(nw);
+            sys.C2, sys.D21, zeros(nz,nw)];
         add_constr = [];
     end
 

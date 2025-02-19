@@ -302,7 +302,7 @@ class ConstrainedLtiRnnGeneralSectorConditionsTransformed(
         B2 = X_inv @ self.B2_tilde
 
         L_inv = torch.linalg.inv(self.get_L())
-        C2 = -L_inv @ (self.C2_tilde + self.H)
+        C2 = -L_inv @ self.C2_tilde + self.H
         D21 = -L_inv @ self.D21_tilde
 
         A_bar = A - B2 @ C2
@@ -322,7 +322,7 @@ class ConstrainedLtiRnnGeneralSectorConditionsTransformed(
         constraint_fcn: List[Callable] = []
         la = torch.diag(self.get_L())
         for n_k in range(self.nz):
-            constraint_fcn.append(lambda: la[n_k])
+            constraint_fcn.append(lambda n_k=n_k: la[n_k])
         return constraint_fcn
 
     def sdp_constraints(self) -> List[Callable]:

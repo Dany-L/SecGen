@@ -92,7 +92,7 @@ for model_idx =1:length(model_names)
     M_orig = [M11_orig, M21_orig';M21_orig, M22_orig];
 
     if not(H==false)
-        M_gen = [-eye(nz), H';H, -X];
+        M_gen = [-X, H';H, -eye(nz)];
         fprintf('max real eig M_orig: %f, max real eig M_gen: %f\n',max(real(eig(M_orig))), max(real(eig(M_gen))))
     else
         fprintf('max real eig M_orig: %f\n',max(real(eig(M_orig))))
@@ -102,18 +102,18 @@ for model_idx =1:length(model_names)
     A = X_inv * A_tilde;
     B = X_inv * B_tilde;
     B2 = X_inv * B2_tilde;
-
     L_inv = L^(-1);
-    C2 = -L_inv * (C2_tilde + H);
+    
     D21 = -L_inv * D21_tilde;
+    C2 = -L_inv * C2_tilde + H;
 
-    sys = struct('A', A, 'B', B, 'B2', B2, 'C', C, 'D', D, 'D12', D12, 'C2', C2, 'D21', D21);
+    sys = struct('A', A, 'B', B, 'B2', B2, 'C', C, 'D', D, 'D12', D12, 'C2', C2, 'D21', D21, 'X', X, 'L', L);
 %     sys = struct('A', A, 'B', zeros(nx,nd), 'B2', B2, 'C', zeros(ne,nx), 'D', zeros(ne,nd), 'D12', zeros(ne,nw), 'C2', C2, 'D21', zeros(nz,nd))
     A_bar = (A-B2*C2);
     B_bar = (B-B2*D21);
     C_bar = (C-D12*C2);
     D_bar = (D-D12*D21);
-    sys_tilde = struct('A', A_bar, 'B', B_bar, 'B2', B2, 'C', C_bar, 'D', D_bar, 'D12', D12, 'C2', C2, 'D21', D21);
+    sys_tilde = struct('A', A_bar, 'B', B_bar, 'B2', B2, 'C', C_bar, 'D', D_bar, 'D12', D12, 'C2', C2, 'D21', D21, 'X', X, 'L', L);
 
     %% find an upper bound on the l2 gain
 
@@ -128,13 +128,13 @@ for model_idx =1:length(model_names)
 
     %% simulate
     if b_gen
-        fprintf('gen sector conditions\n')
-        analyze_system(sys,-1,1,H);
-        fprintf('std sector conditions\n')
-        analyze_system(sys_tilde,0,1,false);
         e_hat_n_cmp = d_sim(sys, d_n, zeros(nx,1), varphi_tilde);
         e_hat_n = d_sim(sys_tilde, d_n, zeros(nx,1), varphi);
         assert(norm(e_hat_n - e_hat_n_cmp) < 1e-5)
+        fprintf('gen sector conditions\n')
+        analyze_system(sys,-1,0,H);
+        fprintf('std sector conditions\n')
+        analyze_system(sys_tilde,0,1,false);
     else
         fprintf('std sector conditions\n')
         analyze_system(sys,0,1,false);
@@ -144,6 +144,7 @@ for model_idx =1:length(model_names)
     % e_hat = e_hat_n;
     e_hat = e_hat_n .* normalization.output_std + normalization.output_mean;
     results{model_idx} = e_hat;
+
 
     %% simulate worst case amplification from lstm
     wc_lstm_filename = '/Users/jack/coupled-msd/2024_12_12-cRnn/MSD-128-zero-dual-lstm/seq/test_output-stability_l2-coupled-msd-routine.mat';

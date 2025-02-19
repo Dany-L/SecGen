@@ -132,6 +132,7 @@ class InputOutputStabilityL2(AdditionalTest):
                     e_hat.clone().detach(),
                     d.clone().detach(),
                 )
+            if epoch % 100 == 0:
                 self.tracker.track(
                     ev.Log(
                         "",
