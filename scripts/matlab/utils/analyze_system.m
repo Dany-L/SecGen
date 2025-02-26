@@ -26,7 +26,7 @@ function l2_gain = analyze_system(sys, alpha, beta, H)
         % H = sdpvar(nz,nx);
         L3 = [zeros(nw,nx), zeros(nw,nd), eye(nw);
             sys.C2-H, sys.D21, zeros(nz,nw)];    
-        add_constr = ([-X, H';H, -eye(nz)]<= -eps*eye(2*nx));
+        add_constr = ([-X, H';H, -eye(nz)]<= -eps*eye(nz+nx));
         % add_constr = [];
     else
         L3 = [zeros(nw,nx), zeros(nw,nd), eye(nw);

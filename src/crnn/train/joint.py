@@ -35,11 +35,6 @@ class JointInitPredictor(InitPred):
         initializer, predictor = models
         (opt_pred,) = optimizers
         (sch_pred,) = schedulers
-        initializer.initialize_parameters()
-        initializer.set_lure_system()
-        problem_status = predictor.initialize_parameters()
-        tracker.track(ev.Log("", f"Initialize parameters: {problem_status}"))
-        predictor.set_lure_system()
         predictor.train()
         t, increase_rate, increase_after_epochs = (
             exp_config.t,

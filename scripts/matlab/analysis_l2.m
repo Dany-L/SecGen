@@ -1,9 +1,9 @@
 clear all, close all,
 %%
 
-experiment_name = 'MSD-8-zero-dual';
+experiment_name = 'MSD-16-zero-dual';
 
-result_directory = '~/coupled-msd/2024_12_12-cRnn';
+result_directory = '~/coupled-msd/2025_02_11-cRnn';
 test_file_name = '~/coupled-msd/data/coupled-msd-routine/processed/test/0093_simulation_T_1500.csv';
 
 % result_directory = '~/actuated_pendulum/results_local';
@@ -19,7 +19,7 @@ for model_idx =1:length(model_names)
     fprintf('---%s---\n', model_name)
 
     e_m_name = sprintf('%s-%s', experiment_name, model_name);
-    parameter_file_name = sprintf('model_params-%s.mat', e_m_name);
+    parameter_file_name = sprintf('model_params-%s-update.mat', e_m_name);
     
 %     test_file_name = '/Users/jack/actuated_pendulum/data/ood-initial_state_0-s_4_M-100_T-10/processed/test/0058_simulation_T_10.csv';
     experiment_config_file_name = sprintf('config-experiment-%s.json', e_m_name);
@@ -39,6 +39,7 @@ for model_idx =1:length(model_names)
     end
 
     varphi_tilde = @(x) varphi(x) -x;
+    zero_nl = @(x) 0;
     % x = -5:0.1:5;
     % figure(), grid on, hold on
     % plot(x, varphi(x))
@@ -130,6 +131,7 @@ for model_idx =1:length(model_names)
     if b_gen
         e_hat_n_cmp = d_sim(sys, d_n, zeros(nx,1), varphi_tilde);
         e_hat_n = d_sim(sys_tilde, d_n, zeros(nx,1), varphi);
+        % e_hat_zero_n = d_sim(sys_tilde, d_n, zeros(nx,1), zero_nl);
         assert(norm(e_hat_n - e_hat_n_cmp) < 1e-5)
         fprintf('gen sector conditions\n')
         analyze_system(sys,-1,0,H);
@@ -143,7 +145,10 @@ for model_idx =1:length(model_names)
     
     % e_hat = e_hat_n;
     e_hat = e_hat_n .* normalization.output_std + normalization.output_mean;
+    % e_hat_zero = e_hat_zero_n .* normalization.output_std + normalization.output_mean;
+    % fprintf('error zero_nl vs. activation: %f \n', norm(e_hat_zero-e_hat))
     results{model_idx} = e_hat;
+    % results{end+1} = e_hat_zero;
 
 
     %% simulate worst case amplification from lstm
@@ -173,7 +178,6 @@ legend([model_names, 'e', 'd'])
 %     legend({model_names{i}, 'lstm'})
 %     title(sprintf('%s: Worst case amplification from LSTM', model_names{i}))
 % end
-
 
 
 

@@ -1,7 +1,9 @@
-from typing import Literal, Optional, Tuple, Union
+from typing import Any, Dict, List, Literal, Optional, Tuple, Union
 
+import numpy as np
 import torch
 from jax.typing import ArrayLike
+from numpy.typing import NDArray
 
 from ...utils import transformation as trans
 from .. import base
@@ -55,9 +57,6 @@ class BasicRnn(base_torch.DynamicIdentificationModel):
         e_hat = self.output_layer.forward(x)
         return (e_hat, (h,))
 
-    def initialize_parameters(self) -> str:
-        return "standard initialization of parameters"
-
     def project_parameters(self) -> None:
         pass
 
@@ -103,9 +102,6 @@ class BasicLstm(base_torch.DynamicIdentificationModel):
         x, (h, c) = self.lstm_layer.forward(d, x0)
         e_hat = self.output_layer.forward(x)
         return (e_hat, (h, c))
-
-    def initialize_parameters(self) -> str:
-        return "standard initialization of parameters"
 
     def project_parameters(self) -> None:
         pass
@@ -161,9 +157,6 @@ class BasicLtiRnn(base_torch.ConstrainedModule):
 
     def check_constraints(self) -> bool:
         return True
-
-    def initialize_parameters(self) -> str:
-        return "standard initialization of parameters"
 
     def project_parameters(self) -> None:
         pass

@@ -13,7 +13,8 @@ from torch.optim import Optimizer, lr_scheduler
 from torch.utils.data import DataLoader
 
 from ..configuration.experiment import BaseExperimentConfig, load_configuration
-from ..data_io import get_result_directory_name, load_data, load_normalization
+from ..data_io import (get_result_directory_name, load_data,
+                       load_initialization, load_normalization)
 from ..datasets import get_datasets, get_loaders
 from ..loss import get_loss_function
 from ..models import base
@@ -155,7 +156,16 @@ def train(
             )
         ]
 
-        initializer, predictor = get_model_from_config(model_config)
+        init_data = load_initialization(result_directory)
+        (initializer, predictor) = get_model_from_config(model_config)
+
+        initializer.set_lure_system()
+        init_data = predictor.initialize_parameters(
+            n_train_inputs, n_train_outputs, init_data.data
+        )
+        tracker.track(ev.Log("", init_data.msg))
+        if init_data.data:
+            tracker.track(ev.SaveInitialization("", init_data.data["ss"], {}))
         optimizers = get_optimizer(experiment_config, (initializer, predictor))
         schedulers = get_scheduler(optimizers)
 
@@ -198,9 +208,6 @@ def continue_training(
     experiment_name: str,
     gpu: bool,
 ) -> None:
-    # load parameters from file
-    # set trainable parameters
-    # continue training
     device = utils.get_device(gpu)
 
     result_directory = get_result_directory_name(
@@ -311,14 +318,14 @@ def continue_training(
                 f"The parameters are not trained, first train the model {model_name}."
             )
 
-        if not predictor.check_constraints():
-            tracker.track(
-                ev.Log(
-                    "", "Loaded parameters are not feasible, project onto feasible set."
-                )
-            )
-            result = predictor.project_parameters()
-            tracker.track(ev.Log("", f"Projection result: {result}"))
+        # if not predictor.check_constraints():
+        #     tracker.track(
+        #         ev.Log(
+        #             "", "Loaded parameters are not feasible, project onto feasible set."
+        #         )
+        #     )
+        #     result = predictor.project_parameters()
+        #     tracker.track(ev.Log("", f"Projection result: {result}"))
 
         (initializer, predictor) = trainer.train(
             models=(initializer, predictor),
@@ -336,7 +343,7 @@ def continue_training(
     tracker.track(ev.SaveModel("", predictor, "predictor"))
     if initializer is not None:
         tracker.track(ev.SaveModel("", initializer, "initializer"))
-    tracker.track(ev.SaveModelParameter("", predictor))
+    tracker.track(ev.SaveModelParameter("", predictor,'-update'))
     tracker.track(ev.Log("", f"Training duration: {training_duration}"))
     tracker.track(ev.TrackMetrics("", {"training_duration": stop_time - start_time}))
     tracker.track(ev.Stop(""))

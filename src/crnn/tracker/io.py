@@ -2,7 +2,8 @@ import json
 import os
 from datetime import datetime
 
-from ..configuration.base import FIG_FOLDER_NAME, SEQ_FOLDER_NAME
+from ..configuration.base import (FIG_FOLDER_NAME, INITIALIZATION_FILENAME,
+                                  NORMALIZATION_FILENAME, SEQ_FOLDER_NAME)
 from ..data_io import (save_input_output_to_mat, save_model,
                        save_model_parameter, write_dict_to_json)
 from ..utils import base as utils
@@ -24,7 +25,7 @@ class IoTracker(BaseTracker):
             self.write_to_logfile(event.log_msg)
         elif isinstance(event, ev.SaveNormalization):
             with open(
-                os.path.join(self.directory, "normalization.json"),
+                os.path.join(self.directory, f"{NORMALIZATION_FILENAME}.json"),
                 "w",
             ) as f:
                 json.dump(
@@ -39,6 +40,20 @@ class IoTracker(BaseTracker):
             self.write_to_logfile(
                 f"Save normalization mean and std to {self.directory}"
             )
+        elif isinstance(event, ev.SaveInitialization):
+            ss = dict(
+                A=event.ss.A.detach().numpy().tolist(),
+                B=event.ss.B.detach().numpy().tolist(),
+                C=event.ss.C.detach().numpy().tolist(),
+                D=event.ss.D.detach().numpy().tolist(),
+            )
+            event.data["ss"] = ss
+            with open(
+                os.path.join(self.directory, f"{INITIALIZATION_FILENAME}.json"),
+                "w",
+            ) as f:
+                json.dump(event.data, f)
+            self.write_to_logfile(f"Save initialization to {self.directory}")
         elif isinstance(event, ev.SaveFig):
             fig_subdirectory = os.path.join(self.directory, FIG_FOLDER_NAME)
             os.makedirs(fig_subdirectory, exist_ok=True)
@@ -60,7 +75,7 @@ class IoTracker(BaseTracker):
         elif isinstance(event, ev.SaveModelParameter):
             save_model_parameter(
                 event.model,
-                os.path.join(self.directory, f"model_params-{self.model_name}"),
+                os.path.join(self.directory, f"model_params-{self.model_name}{event.name_suffix}"),
             )
             self.write_to_logfile(
                 f"Save model parameters as mat file to {self.directory}"

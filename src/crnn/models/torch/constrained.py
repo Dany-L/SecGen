@@ -56,9 +56,6 @@ class ConstrainedLtiRnn(base_torch.L2StableConstrainedModule):
 
         return [stability_lmi]
 
-    def initialize_parameters(self) -> str:
-        return self.project_parameters()
-
     def project_parameters(self) -> str:
         X = cp.Variable((self.nx, self.nx), symmetric=True)
 
@@ -178,9 +175,6 @@ class ConstrainedLtiRnnGeneralSectorConditions(base_torch.L2StableConstrainedMod
             return -trans.torch_bmat([[-torch.eye(self.nz), self.H.T], [self.H, -X]])
 
         return [stability_lmi, general_sector]
-
-    def initialize_parameters(self) -> str:
-        return self.project_parameters()
 
     def set_lure_system(self) -> base.LureSystemClass:
         X_inv = torch.linalg.inv(self.get_X())
@@ -362,9 +356,6 @@ class ConstrainedLtiRnnGeneralSectorConditionsTransformed(
         return [stability_lmi, general_sector]
         # return [stability_lmi]
 
-    def initialize_parameters(self) -> str:
-        return self.project_parameters()
-
     def project_parameters(self) -> str:
         # set H to zero initially, this will automatically satisfy the constraints
         X = cp.Variable((self.nx, self.nx), symmetric=True)
@@ -421,7 +412,7 @@ class ConstrainedLtiRnnGeneralSectorConditionsTransformed(
         )
         problem.solve(solver=self.sdp_opt)
         if not problem.status == "optimal":
-            ValueError(f"cvxpy did not find a solution. {problem.status}")
+            Warning(f"cvxpy did not find a solution. {problem.status}")
 
         self.A_tilde.data = torch.tensor(utils.get_opt_values(A_tilde))
         self.B_tilde.data = torch.tensor(utils.get_opt_values(B_tilde))
@@ -440,4 +431,6 @@ class ConstrainedLtiRnnGeneralSectorConditionsTransformed(
         self.Lx.data = torch.tensor(np.linalg.cholesky(utils.get_opt_values(X)))
         # self.X.data = torch.tensor(utils.get_opt_values(X))
 
-        return f"Projected parameters with cvxpy solution, ga2: {utils.get_opt_values(ga2)}, problem status: {problem.status}"
+        d = np.linalg.norm(M.value - M0)
+
+        return f"Projected parameters with cvxpy solution, ga2: {utils.get_opt_values(ga2)}, d: {d:.2f}, problem status: {problem.status}"

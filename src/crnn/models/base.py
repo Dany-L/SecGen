@@ -1,14 +1,20 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Callable, List, Optional, Tuple, Type, Union
+from typing import Any, Callable, Dict, List, Optional, Tuple, Type, Union
 
 import numpy as np
+import pandas as pd
 import torch
 import torch.nn as nn
 from jax import Array
 from jax.typing import ArrayLike
+from nfoursid.nfoursid import NFourSID
+from numpy.typing import NDArray
 from pydantic import BaseModel
 
+from ..configuration.base import InitializationData
+
+MAX_SAMPLES_N4SID = 50000
 
 @dataclass
 class LureSystemClass:
@@ -39,9 +45,14 @@ class DynamicIdentificationModel(ABC):
         self.nx = self.nz
         self.nd, self.ne = config.nd, config.ne  # size of input and output
 
-    @abstractmethod
-    def initialize_parameters(self) -> str:
-        pass
+    def initialize_parameters(
+        self,
+        ds: List[NDArray[np.float64]],
+        es: List[NDArray[np.float64]],
+        init_data: Dict[str, Any],
+    ) -> InitializationData:
+        self.set_lure_system()
+        return InitializationData('Standard initialization of parameters.', {})
 
     @abstractmethod
     def sdp_constraints(self) -> List[Callable]:
@@ -216,3 +227,40 @@ def get_lure_matrices(
     D22 = gen_plant[nx + ne :, nx + nd :]
 
     return LureSystemClass(A, B, B2, C, D, D12, C2, D21, D22, nonlinearity)
+
+
+def run_n4sid(
+    ds: NDArray[np.float64],
+    es: NDArray[np.float64],
+    nx=5,
+    num_block_rows=1,
+) -> Linear:
+
+    N, nd = ds[0].shape
+    M = len(ds)
+    _, ne = ds[0].shape
+
+    f = MAX_SAMPLES_N4SID / (N*M)
+    if f < 1:        
+        subset_size = np.max([int(f * M),1])
+        idx = np.random.choice(range(M), subset_size)
+    else:
+        idx = range(M)
+
+    d = np.vstack(np.array(ds)[idx])
+    input_names = [f"d_{i}" for i in range(nd)]
+    e = np.vstack(np.array(es)[idx])
+    output_names = [f"e_{i}" for i in range(ne)]
+    io_data = pd.DataFrame(np.hstack([d, e]), columns=input_names + output_names)
+    n4sid = NFourSID(
+        io_data,
+        input_columns=input_names,
+        output_columns=output_names,
+        num_block_rows=num_block_rows
+    )
+    n4sid.subspace_identification()
+    ss, _ = n4sid.system_identification(rank=nx)
+
+    return Linear(
+        torch.tensor(ss.a), torch.tensor(ss.b), torch.tensor(ss.c), torch.tensor(ss.d)
+    )

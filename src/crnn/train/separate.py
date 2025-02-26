@@ -35,12 +35,7 @@ class SeparateInitPredictor(InitPred):
         initializer, predictor = models
         opt_init, opt_pred = optimizers
         sch_init, sch_pred = schedulers
-        initializer.initialize_parameters()
-        initializer.set_lure_system()
         initializer.train()
-        problem_status = predictor.initialize_parameters()
-        tracker.track(ev.Log("", f"Initialize parameters: {problem_status}"))
-        predictor.set_lure_system()
         predictor.train()
         t, increase_rate, increase_after_epochs = (
             exp_config.t,

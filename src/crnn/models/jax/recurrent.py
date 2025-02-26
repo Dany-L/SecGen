@@ -1,11 +1,13 @@
-from typing import Callable, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import jax.numpy as jnp
 import numpy as np
 import torch
 from jax import Array, random, vmap
 from jax.typing import ArrayLike
+from numpy.typing import NDArray
 
+from ...configuration import base
 from . import base as base_jax
 
 
@@ -73,8 +75,13 @@ class BasicLtiRnn(base_jax.ConstrainedModule):
     def pointwise_constraints(self) -> List[Callable]:
         return [lambda: np.eye(1)]
 
-    def initialize_parameters(self) -> str:
-        return "no initialization of parameters needed"
+    def initialize_parameters(
+        self,
+        ds: List[NDArray[np.float64]],
+        es: List[NDArray[np.float64]],
+        init_data: Dict[str, Any],
+    ) -> base.InitializationData:
+        return base.InitializationData("Standard initialization", {})
 
     def project_parameters(self) -> None:
         pass

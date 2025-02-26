@@ -1,5 +1,6 @@
 from functools import partial
-from typing import Callable, List, Literal, Optional, Tuple, Type, Union
+from typing import (Any, Callable, Dict, List, Literal, Optional, Tuple, Type,
+                    Union)
 
 import cvxpy as cp
 import jax.numpy as jnp
@@ -57,9 +58,14 @@ class ConstrainedModule(base.DynamicIdentificationModel):
         self.theta = random.normal(key, (self.get_number_of_parameters(), 1))
         self.theta = self.initialize_parameters()
 
-    def initialize_parameters(self) -> str:
+    def initialize_parameters(
+        self,
+        ds: List[NDArray[np.float64]],
+        es: List[NDArray[np.float64]],
+        init_data: Dict[str, Any],
+    ) -> base.InitializationData:
         self.theta = jnp.zeros((self.get_number_of_parameters(), 1))
-        return "initialized theta with zeros"
+        return base.InitializationData("initialized theta with zeros", {})
 
     def get_optimization_multiplier_and_constraints(
         self,

@@ -1,6 +1,6 @@
 import argparse
 from dataclasses import dataclass, field
-from typing import Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 import numpy as np
 from numpy.typing import NDArray
@@ -10,6 +10,8 @@ DATASET_DIR_ENV_VAR = "DATASET_DIRECTORY"
 RESULT_DIR_ENV_VAR = "RESULT_DIRECTORY"
 FIG_FOLDER_NAME = "fig"
 SEQ_FOLDER_NAME = "seq"
+NORMALIZATION_FILENAME = "normalization"
+INITIALIZATION_FILENAME = "initialization"
 
 
 @dataclass
@@ -24,6 +26,12 @@ class InputOutput:
     e_hat: NDArray[np.float64]
     e: Optional[NDArray[np.float64]] = field(default_factory=lambda: np.array([0.0]))
     x0: Optional[NDArray[np.float64]] = field(default_factory=lambda: np.array([0.0]))
+
+
+@dataclass
+class InitializationData:
+    msg: str
+    data: Dict[str, Any]
 
 
 @dataclass

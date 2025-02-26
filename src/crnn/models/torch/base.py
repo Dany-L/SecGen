@@ -1,4 +1,5 @@
-from typing import Callable, List, Literal, Optional, Tuple, Union
+import time
+from typing import Any, Callable, Dict, List, Literal, Optional, Tuple, Union
 
 import cvxpy as cp
 import numpy as np
@@ -8,6 +9,9 @@ from jax import Array
 from jax.typing import ArrayLike
 from numpy.typing import NDArray
 
+from ...configuration.base import InitializationData
+from ...systemtheory import analysis as ana
+from ...utils import base as utils
 from ...utils import transformation as trans
 from .. import base
 
@@ -34,12 +38,17 @@ class ConstrainedModuleConfig(DynamicIdentificationConfig):
     ga2: float = 1.0
     init_type: Literal["rand", "zero"] = "rand"
     init_std: float = 1.0
-    learn_H: bool = False
+    learn_H: bool = (False,)
+    initialization: Literal["n4sid", "project"] = "project"
+    nx: Optional[int] = False
 
 
 class ConstrainedModule(DynamicIdentificationModel):
     def __init__(self, config: ConstrainedModuleConfig) -> None:
         super().__init__(config)
+
+        if config.nx:
+            self.nx = config.nx
 
         self.nl: Optional[nn.Module] = None
         if config.nonlinearity == "tanh":
@@ -170,8 +179,6 @@ class StableConstrainedModule(ConstrainedModule):
         )
         self.D22 = torch.zeros((self.nz, self.nw))
 
-        self.X = torch.nn.Parameter(torch.zeros((self.nx, self.nx)))
-
     def set_lure_system(self) -> base.LureSystemClass:
         X_inv = torch.linalg.inv(self.X)
         A = X_inv @ self.A_tilde
@@ -203,6 +210,8 @@ class L2StableConstrainedModule(ConstrainedModule):
         self.D21_tilde = torch.nn.Parameter(torch.zeros((self.nz, self.nd)))
         self.D22 = torch.zeros((self.nz, self.nw))
 
+        self.initialization = config.initialization
+
         # X is required to be symmetric. We use a lower triangular matrix as parameter.
         # X = L @ L.T then ensures symmetry.
         self.Lx = torch.nn.Parameter(config.init_std * torch.eye(self.nx, self.nx))
@@ -214,6 +223,62 @@ class L2StableConstrainedModule(ConstrainedModule):
             for n, p in self.named_parameters():
                 if p.requires_grad and not (n == "X" or n == "L"):
                     torch.nn.init.normal_(p, mean=0.0, std=config.init_std)
+
+    def initialize_parameters(
+        self,
+        ds: List[NDArray[np.float64]],
+        es: List[NDArray[np.float64]],
+        init_data: Dict[str, Any],
+    ) -> InitializationData:
+
+        if self.initialization == "project":
+            msg = self.project_parameters()
+            self.set_lure_system()
+            return InitializationData(msg, {})
+        elif self.initialization == "n4sid":
+            if init_data:
+                msg = "n4sid: Initialization loaded from file"
+                ss = init_data["ss"]
+            else:
+                start_time = time.time()
+                ss = base.run_n4sid(ds, es, self.nx, 10)
+                stop_time = time.time()
+                n4sid_duration = utils.get_duration_str(start_time, stop_time)
+                msg = f"n4sid: duration {n4sid_duration}"
+
+            an = ana.AnalysisLti(ss,self.nz)
+            msg_l2, add_par = an.l2(ana.SectorBounded(0, 1),self.ga2.detach().numpy())
+            msg += f' l2 analysis: {msg_l2}'
+            assert add_par.ga2 <= self.ga2.detach().numpy()
+
+            self.Lx.data = torch.linalg.cholesky(torch.tensor(add_par.X))
+            assert (
+                np.linalg.norm((self.Lx @ self.Lx.T).detach().numpy() - add_par.X)
+            ) < 1e-5
+
+            self.set_L(torch.tensor(add_par.Lambda))
+
+            self.A_tilde.data = self.get_X() @ ss.A
+            self.B_tilde.data = self.get_X() @ ss.B
+            self.C.data = ss.C
+            self.D.data = ss.D
+
+            # self.A_tilde.requires_grad = False
+            # self.B_tilde.requires_grad = False
+            # self.C.requires_grad = False
+            # self.D.requires_grad = False
+
+            self.set_lure_system()
+            msg_proj = self.project_parameters()
+            msg += f' proj: {msg_proj}'
+            self.set_lure_system()
+            # assert self.check_constraints()
+
+            return InitializationData(msg, {"ss": ss})
+        else:
+            raise NotImplementedError(
+                f"Initialization type {self.initialization} is not implemented."
+            )
 
     def set_lure_system(self) -> base.LureSystemClass:
         X_inv = torch.linalg.inv(self.get_X())

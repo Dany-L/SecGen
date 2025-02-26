@@ -97,6 +97,7 @@ class BaseExperimentConfig(BaseModel):
     ensure_constrained_method: Literal["armijo", "project", "backtracking", "dual"] = (
         "project"
     )
+    initialization: Literal["project", "n4sid"] = "project"
 
 
 class ExperimentConfig(BaseModel):

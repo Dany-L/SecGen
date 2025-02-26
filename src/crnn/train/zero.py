@@ -7,6 +7,7 @@ from torch import nn
 from torch.optim import Optimizer, lr_scheduler
 from torch.utils.data import DataLoader
 
+from ..configuration.base import InputOutput
 from ..configuration.experiment import BaseExperimentConfig
 from ..models import base
 from ..models.jax import base as base_jax
@@ -25,14 +26,24 @@ class ZeroInitPredictor(InitPred):
         predictor: base.DynamicIdentificationModel,
         val_loader: DataLoader,
         loss_function: nn.Module,
-    ) -> torch.Tensor:
+    ) -> Tuple[torch.Tensor, InputOutput]:
         with torch.no_grad():
             loss = torch.tensor(0.0)
             for batch in val_loader:
                 e_hat, _ = predictor.forward(batch["d"])
                 loss += loss_function(e_hat, batch["e"]).item()
 
-        return 1 / len(val_loader) * loss
+            B, N_val, nd = batch["d"].shape
+            _, _, ne = batch["e"].shape
+
+        return (
+            1 / len(val_loader) * loss,
+            InputOutput(
+                batch["d"].detach().numpy().reshape(N_val, nd),
+                e_hat.detach().numpy().reshape(N_val, ne),
+                batch["e"].detach().numpy().reshape(N_val, ne),
+            ),
+        )
 
     def train(
         self,
@@ -51,10 +62,27 @@ class ZeroInitPredictor(InitPred):
         _, predictor = models
         _, opt_pred = optimizers
         _, sch_pred = schedulers
-        if initialize:
-            status = predictor.initialize_parameters()
-            tracker.track(ev.Log("", f"Initialized predictor: {status}"))
-        predictor.set_lure_system()
+
+        init_val_loss, io_sample = self.validate(
+            predictor, validation_loader, loss_function
+        )
+        tracker.track(
+            ev.SaveFig(
+                "",
+                plot.plot_sequence(
+                    [io_sample.e, io_sample.e_hat],
+                    0.1,
+                    "validation sequence after initialization",
+                    ["e", "e_hat"],
+                ),
+                "val_seq_init",
+            )
+        )
+        tracker.track(
+            ev.Log("", f"validation loss after initialization: {init_val_loss:.2f}")
+        )
+        tracker.track(ev.TrackMetrics("", {"init.val_loss.predictor": init_val_loss}))
+
         # predictor.train()
         t, increase_rate, increase_after_epochs = (
             exp_config.t,
@@ -250,21 +278,15 @@ class ZeroInitPredictor(InitPred):
                         )
                     ):
                         if len(F_i().shape) > 0:
-                            # min eigenvalue must be positive
-                            # min_eigenvals[idx] = -(torch.linalg.eigh(F_i()).eigenvalues[0] - 1e-3)
                             min_eigenvals[idx] = -(
                                 torch.min(torch.real(torch.linalg.eig(F_i())[0])) - 1e-3
                             )
-                            # min_eigenvals.append(torch.nn.functional.relu(-torch.linalg.eigh(F_i()).eigenvalues[0]))
+
                         else:
                             min_eigenvals[idx] = -F_i()
-                            # min_eigenvals.append(torch.nn.functional.relu(-F_i()))
                         batch_phi += lam_i * min_eigenvals[idx]
-                        # print(f'min eigenvalue: {min_eigenvals[-1]}')
 
                     (batch_loss + batch_phi).backward()
-
-                    # torch.nn.utils.clip_grad_norm_(predictor.parameters(),1.0)
 
                     opt_pred.step()
 
@@ -283,9 +305,6 @@ class ZeroInitPredictor(InitPred):
                             if p.grad is not None
                         ]
                     ).reshape(-1, 1)
-                    # print(f'{step} \t batch loss: {batch_loss:.2f} \t batch phi: {batch_phi:.2f} \t norm grad: {torch.linalg.norm(grads):.2f}')
-
-                    # tracker.track(ev.Log("", f"{step}: \t Dual variable: {[np.round(lam_i.detach().numpy(),1) for lam_i in dual_vars]} \t Min eigvals: {[np.round(ev_i.detach().numpy(),1) for ev_i in min_eigenvals]}"))
 
                 else:
                     raise ValueError(
@@ -306,7 +325,22 @@ class ZeroInitPredictor(InitPred):
 
             # evaluate parameters on validation data
             old_val_loss = val_loss.clone()
-            val_loss = self.validate(predictor, validation_loader, loss_function)
+            val_loss, io_sample = self.validate(
+                predictor, validation_loader, loss_function
+            )
+            if epoch % 10 == 0:
+                tracker.track(
+                    ev.SaveFig(
+                        "",
+                        plot.plot_sequence(
+                            [io_sample.e, io_sample.e_hat],
+                            0.1,
+                            f"validation sequence e={epoch}",
+                            ["e", "e_hat"],
+                        ),
+                        f"val_seq-{epoch}",
+                    )
+                )
             if old_val_loss <= val_loss:
                 steps_without_improvement += 1
 

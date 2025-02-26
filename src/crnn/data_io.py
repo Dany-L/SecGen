@@ -9,8 +9,10 @@ import torch
 from numpy.typing import NDArray
 from scipy.io import loadmat, savemat
 
-from .configuration.base import (DATASET_DIR_ENV_VAR, InputOutput,
-                                 Normalization, NormalizationParameters)
+from .configuration.base import (DATASET_DIR_ENV_VAR, INITIALIZATION_FILENAME,
+                                 NORMALIZATION_FILENAME, InitializationData,
+                                 InputOutput, Normalization,
+                                 NormalizationParameters)
 from .models import base as base
 from .models.jax import base as base_jax
 from .models.jax.recurrent import get_matrices_from_flat_theta
@@ -183,7 +185,7 @@ def write_dict_to_json(config: Dict[str, Any], file_name: str) -> None:
 
 def load_normalization(directory: str) -> Normalization:
     with open(
-        os.path.join(directory, "normalization.json"),
+        os.path.join(directory, f"{NORMALIZATION_FILENAME}.json"),
         "r",
     ) as f:
         normalization = json.load(f)
@@ -195,3 +197,26 @@ def load_normalization(directory: str) -> Normalization:
             mean=normalization["output_mean"], std=normalization["output_std"]
         ),
     )
+
+
+def load_initialization(directory: str) -> InitializationData:
+    filename = os.path.join(directory, f"{INITIALIZATION_FILENAME}.json")
+    if os.path.exists(filename):
+        with open(
+            filename,
+            "r",
+        ) as f:
+            initialization = json.load(f)
+        return InitializationData(
+            "",
+            {
+                "ss": base.Linear(
+                    torch.tensor(initialization["ss"]["A"]),
+                    torch.tensor(initialization["ss"]["B"]),
+                    torch.tensor(initialization["ss"]["C"]),
+                    torch.tensor(initialization["ss"]["D"]),
+                )
+            },
+        )
+    else:
+        return InitializationData("", {})

@@ -1,5 +1,5 @@
 import os
-from typing import List, Optional, Tuple
+from typing import List, Tuple
 
 from ..configuration.experiment import BaseExperimentConfig, BaseModelConfig
 from ..utils import base as utils
@@ -11,10 +11,7 @@ from .torch.recurrent import BasicLstm
 
 def get_model_from_config(
     model_config: BaseModelConfig,
-) -> Tuple[base.DynamicIdentificationModel]:
-    predictor: Optional[base.DynamicIdentificationModel] = None
-    initializer: Optional[base.DynamicIdentificationModel] = None
-
+) -> Tuple[base.DynamicIdentificationModel, base.DynamicIdentificationModel]:
     model_class = base.retrieve_model_class(model_config.m_class)
 
     if isinstance(model_class, BasicLstm):
@@ -98,3 +95,14 @@ def load_model(
             )
 
         return [initializer, predictor]
+
+
+def copy_common_fields(
+    source: BaseExperimentConfig, target: base.DynamicIdentificationConfig
+) -> None:
+    # Identify common fields
+    common_fields = set(source.model_fields.keys()) & set(target.model_fields.keys())
+
+    # Copy values from source to target
+    for field in common_fields:
+        setattr(target, field, getattr(source, field))

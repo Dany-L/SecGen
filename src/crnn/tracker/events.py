@@ -4,7 +4,7 @@ from typing import Any, Dict, List, Literal, Optional, Union
 from matplotlib.figure import Figure
 
 from ..configuration.base import InputOutput, NormalizationParameters
-from ..models.base import DynamicIdentificationModel
+from ..models.base import DynamicIdentificationModel, Linear
 from .base import Event, TrackerConfig
 
 
@@ -71,7 +71,7 @@ class SaveSequences(Event):
 
 @dataclasses.dataclass
 class SaveModelParameter(ModelEvent):
-    pass
+    name_suffix: str = ''
 
 
 @dataclasses.dataclass
@@ -96,6 +96,12 @@ class TrackParameter(Event):
 class SaveNormalization(Event):
     input: NormalizationParameters
     output: NormalizationParameters
+
+
+@dataclasses.dataclass
+class SaveInitialization(Event):
+    ss: Linear
+    data: Dict[str, Any]
 
 
 @dataclasses.dataclass

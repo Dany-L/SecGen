@@ -67,15 +67,28 @@
         "flexible_parameters":{
             "nz": [4, 6],
             "initial_hidden_state":[
-                "separate",
                 "zero",
+                "separate",
                 "joint"
             ],
-            "ensure_constrained_method": ["project","armijo", "backtracking", "dual"]
+            "ensure_constrained_method": ["project","armijo", "backtracking", "dual"],
+            "initialization": ["n4sid", "project"],
+            "learn_H":[true, false]
         }
 
     },
     "models": [
+        {
+            "m_short_name" : "satGen",
+            "m_class": "crnn.models.torch.constrained.ConstrainedLtiRnnGeneralSectorConditionsTransformed",
+            "parameters": {
+                "nonlinearity": "sat",
+                "multiplier": "diag",
+                "ga2": 1e10,
+                "init_type": "zero",
+                "init_std": 1
+            }
+        },
         {
             "m_short_name": "ltiRnn",
             "m_class": "crnn.models.torch.recurrent.BasicLtiRnn",
@@ -128,19 +141,8 @@
             "parameters": {
                 "nonlinearity": "sat",
                 "multiplier": "diag",
-                "ga2": 10,
+                "ga2": 1e10,
                 "init_std": 0.1
-            }
-        },
-        {
-            "m_short_name" : "satGen",
-            "m_class": "crnn.models.torch.constrained.ConstrainedLtiRnnGeneralSectorConditionsTransformed",
-            "parameters": {
-                "nonlinearity": "sat",
-                "multiplier": "diag",
-                "ga2": 10,
-                "init_type": "zero",
-                "init_std": 1
             }
         }
     ]
