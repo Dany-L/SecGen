@@ -1,6 +1,6 @@
 import argparse
 from dataclasses import dataclass, field
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple, List
 
 import numpy as np
 from numpy.typing import NDArray
@@ -12,6 +12,9 @@ FIG_FOLDER_NAME = "fig"
 SEQ_FOLDER_NAME = "seq"
 NORMALIZATION_FILENAME = "normalization"
 INITIALIZATION_FILENAME = "initialization"
+PROCESSED_FOLDER_NAME = "processed"
+IN_DISTRIBUTION_FOLDER_NAME = "in-distribution"
+OUT_OF_DISTRIBUTION_FOLDER_NAME = "out-of-distribution"
 
 
 @dataclass
@@ -26,6 +29,14 @@ class InputOutput:
     e_hat: NDArray[np.float64]
     e: Optional[NDArray[np.float64]] = field(default_factory=lambda: np.array([0.0]))
     x0: Optional[NDArray[np.float64]] = field(default_factory=lambda: np.array([0.0]))
+
+@dataclass
+class InputOutputList:
+    d: List[NDArray[np.float64]]
+    e: List[NDArray[np.float64]]
+
+    def __iter__(self):
+        return iter((self.d, self.e))
 
 
 @dataclass

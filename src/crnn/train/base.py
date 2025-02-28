@@ -67,7 +67,7 @@ def train(
     model_name = f"{experiment_name}-{model_name}"
     model_config = config.models[model_name]
     trackers_config = config.trackers
-    dataset_name = os.path.basename(os.path.dirname(dataset_dir))
+    dataset_name = os.path.basename(os.path.dirname(os.path.dirname(dataset_dir)))
     if experiment_config.debug:
         torch.manual_seed(42)
 

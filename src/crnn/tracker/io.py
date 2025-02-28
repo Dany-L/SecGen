@@ -30,10 +30,10 @@ class IoTracker(BaseTracker):
             ) as f:
                 json.dump(
                     dict(
-                        input_mean=float(event.input.mean),
-                        input_std=float(event.input.std),
-                        output_mean=float(event.output.mean),
-                        output_std=float(event.output.std),
+                        input_mean=event.input.mean.tolist(),
+                        input_std=event.input.std.tolist(),
+                        output_mean=event.output.mean.tolist(),
+                        output_std=event.output.std.tolist(),
                     ),
                     f,
                 )

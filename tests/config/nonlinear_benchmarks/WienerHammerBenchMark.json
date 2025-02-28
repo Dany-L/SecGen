@@ -1,0 +1,87 @@
+{
+    "settings": {
+        "experiment_base_name": "WH",
+        "metrics":{
+            "rmse":{
+                "metric_class": "crnn.metrics.Rmse",
+                "parameters":{
+                }
+            }
+        },
+        "trackers":{
+            "io":{
+                "tracker_class": "crnn.tracker.io.IoTracker",
+                "parameters":{
+                }
+            },
+            "mlflow":{
+                "tracker_class": "crnn.tracker.mlflow_integration.MlFlowTracker",
+                "parameters":{
+                }
+            }
+        },
+        "additional_tests":{
+            "stability_evaluation":{
+                "test_class": "crnn.additional_tests.StabilityOfInitialState",
+                "parameters":{
+                    "epochs": 2,
+                    "horizon": 10,
+                    "sampling_type": "random"
+                }
+            },        
+            "stability_l2":{
+                "test_class": "crnn.additional_tests.InputOutputStabilityL2",
+                "parameters":{
+                    "epochs": 2,
+                    "horizon": 5
+                }
+            }
+        },  
+        "static_parameters":{
+            "debug": true,
+            "t": 1e3,
+            "increase_rate": 10.0,
+            "increase_after_epochs": 20,
+            "epochs": 2,
+            "eps": 1e-3,
+            "dt": 1.953125e-05,
+            "optimizer": {
+                "name": "adam",
+                "learning_rate": 0.0025
+            },
+            "batch_size": 16,
+            "window": 0,
+            "loss_function": "mse",
+            "horizons":{
+                "training": 100,
+                "validation": 1000,
+                "testing": 1000
+            },
+            "input_names":[
+                "u_1"
+            ],
+            "output_names":[
+                "y_1"
+            ],
+            "nz": 4,
+            "initial_hidden_state": "zero",
+            "ensure_constrained_method": "dual",
+            "initialization": "n4sid",
+            "learn_H": true,
+            "ga2": 100
+        },
+        "flexible_parameters":{
+        }
+
+    },
+    "models": [
+        {
+            "m_short_name" : "satGen",
+            "m_class": "crnn.models.torch.constrained.ConstrainedLtiRnnGeneralSectorConditionsTransformed",
+            "parameters": {
+                "nonlinearity": "sat",
+                "multiplier": "diag"
+            }
+        }
+    ]
+}

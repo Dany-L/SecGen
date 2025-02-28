@@ -4,6 +4,7 @@ from typing import Dict, Any
 from crnn.train.base import train, continue_training
 from crnn.evaluate import evaluate
 from crnn.configuration.experiment import ExperimentConfig, ExperimentTemplate
+from crnn.utils.base import get_device
 import itertools
 import json
 
@@ -18,8 +19,13 @@ def run_tests(
     config = ExperimentConfig.from_template(ExperimentTemplate(**config_dict))
     model_names = config.m_names
     experiment_names = list(config.experiments.keys())
+    
+    if get_device(gpu=True) == "cuda":
+        devices = [True,False]
+    else:
+        devices = [False]
 
-    par = itertools.product(model_names, [True, False])
+    par = itertools.product(model_names, devices)
 
     for model_name, gpu in par:
         for experiment_name in experiment_names:

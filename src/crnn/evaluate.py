@@ -43,7 +43,7 @@ def evaluate(
     metrics_config = config.metrics
     additional_tests_config = config.additional_tests
 
-    dataset_name = os.path.basename(os.path.dirname(dataset_dir))
+    dataset_name = os.path.basename(os.path.dirname(os.path.dirname(dataset_dir)))
 
     trackers = get_trackers_from_config(
         trackers_config, result_directory, model_name, "validation"
@@ -155,7 +155,7 @@ def evaluate_model(
         e = metric.forward(es, e_hats)
         tracker.track(ev.Log("", f"{name}: {np.mean(e):.2f}"))
         tracker.track(ev.TrackMetrics("", {name: float(np.mean(e))}))
-        metrics_result[name] = float(e)
+        metrics_result[name] = float(np.mean(e))
     results["num_parameters"] = int(predictor.get_number_of_parameters())
     results["metrics"] = metrics_result
 

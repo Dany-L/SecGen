@@ -19,7 +19,8 @@ dependencies = [
     "pydantic",
     "matplotlib",
     "mosek",
-    "mlflow"
+    "mlflow",
+    "nonlinear-benchmarks"
 ]
 [project.optional-dependencies]
 test = [

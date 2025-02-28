@@ -14,7 +14,7 @@ from pydantic import BaseModel
 
 from ..configuration.base import InitializationData
 
-MAX_SAMPLES_N4SID = 50000
+MAX_SAMPLES_N4SID = 45000
 
 @dataclass
 class LureSystemClass:
@@ -238,19 +238,29 @@ def run_n4sid(
 
     N, nd = ds[0].shape
     M = len(ds)
-    _, ne = ds[0].shape
+    _, ne = es[0].shape
 
     f = MAX_SAMPLES_N4SID / (N*M)
     if f < 1:        
-        subset_size = np.max([int(f * M),1])
-        idx = np.random.choice(range(M), subset_size)
+        M_sub = np.max([int(f * M),1])
+        idx = np.random.choice(range(M), M_sub)
     else:
         idx = range(M)
 
-    d = np.vstack(np.array(ds)[idx])
-    input_names = [f"d_{i}" for i in range(nd)]
-    e = np.vstack(np.array(es)[idx])
-    output_names = [f"e_{i}" for i in range(ne)]
+    input_names = [f"u_{i}" for i in range(nd)]
+    output_names = [f"y_{i}" for i in range(ne)]
+
+    if N > MAX_SAMPLES_N4SID:
+        N = MAX_SAMPLES_N4SID
+
+    ds_sub, es_sub = [], []
+    for i in idx:
+        ds_sub.append(ds[i][:N])
+        es_sub.append(es[i][:N])
+
+    d = np.vstack(ds_sub)
+    e = np.vstack(es_sub)
+
     io_data = pd.DataFrame(np.hstack([d, e]), columns=input_names + output_names)
     n4sid = NFourSID(
         io_data,
