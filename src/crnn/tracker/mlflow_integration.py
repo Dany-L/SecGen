@@ -36,10 +36,10 @@ class MlFlowTracker(BaseTracker):
         if isinstance(event, ev.TrackParameter):
             mlflow.log_param(event.name, event.parameter)
         elif isinstance(event, ev.Start):
-            experiment_name = os.path.split(pathlib.Path(self.directory).parent.parent)[
-                1
-            ]
-            mlflow.set_experiment(experiment_name)
+            # experiment_name = os.path.split(pathlib.Path(self.directory).parent.parent)[
+            #     1
+            # ]
+            mlflow.set_experiment(event.dataset_name)
         elif isinstance(event, ev.SaveTrackingConfiguration):
             self.save_tracking_configuration(event)
         elif isinstance(event, ev.Stop):

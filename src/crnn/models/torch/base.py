@@ -247,13 +247,13 @@ class L2StableConstrainedModule(ConstrainedModule):
                 msg = f"n4sid: duration {n4sid_duration}"
 
             an = ana.AnalysisLti(ss,self.nz)
-            msg_l2, add_par = an.l2(ana.SectorBounded(0, 1),self.ga2.detach().numpy())
+            msg_l2, add_par = an.l2(ana.SectorBounded(0, 1),self.ga2.cpu().detach().numpy())
             msg += f' l2 analysis: {msg_l2}'
-            assert add_par.ga2 <= self.ga2.detach().numpy()
+            assert add_par.ga2 <= self.ga2.cpu().detach().numpy()
 
             self.Lx.data = torch.linalg.cholesky(torch.tensor(add_par.X))
             assert (
-                np.linalg.norm((self.Lx @ self.Lx.T).detach().numpy() - add_par.X)
+                np.linalg.norm((self.Lx @ self.Lx.T).cpu().detach().numpy() - add_par.X)
             ) < 1e-5
 
             self.set_L(torch.tensor(add_par.Lambda))

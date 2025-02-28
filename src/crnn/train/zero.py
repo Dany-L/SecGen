@@ -39,9 +39,9 @@ class ZeroInitPredictor(InitPred):
         return (
             1 / len(val_loader) * loss,
             InputOutput(
-                batch["d"].detach().numpy().reshape(N_val, nd),
-                e_hat.detach().numpy().reshape(N_val, ne),
-                batch["e"].detach().numpy().reshape(N_val, ne),
+                batch["d"].cpu().detach().numpy().reshape(N_val, nd),
+                e_hat.cpu().detach().numpy().reshape(N_val, ne),
+                batch["e"].cpu().detach().numpy().reshape(N_val, ne),
             ),
         )
 
