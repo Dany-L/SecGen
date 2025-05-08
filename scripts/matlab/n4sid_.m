@@ -2,16 +2,24 @@ clear all;
 
 %% setup
 base_path = fileparts(mfilename('fullpath'));
-system_name = 'coupled-msd';
-training_directory = sprintf('~/%s/data/%s-routine/processed/train/',system_name, system_name);
-validation_direcotry = sprintf('~/%s/data/%s-routine/processed/validation/', system_name, system_name);
-input_names = {'u_1'};
-output_names = {'y_1'};
-ts = 0.2;
+% system_name = 'coupled-msd';
+% training_directory = sprintf('~/%s/data/%s-routine/processed/train/',system_name, system_name);
+% validation_direcotry = sprintf('~/%s/data/%s-routine/processed/validation/', system_name, system_name);
+% input_names = {'u_1'};
+% output_names = {'y_1'};
+% ts = 0.2;
+
+system_name = 'f16-gvt';
+training_directory = sprintf('~/%s/data/F16GVT_Files/BenchmarkData',system_name, system_name);
+validation_directory = sprintf('~/%s/data/F16GVT_Files/BenchmarkData',system_name, system_name);
+input_names = {'Force'};
+output_names = {'Acceleration1','Acceleration2','Acceleration3'};
+ts = 1/400;
+
 
 %% load data
 [es_train, ds_train] = utils.load_data_from_dir(training_directory, input_names,output_names);
-[es_val, ds_val] = utils.load_data_from_dir(validation_direcotry, input_names,output_names);
+[es_val, ds_val] = utils.load_data_from_dir(validation_direcotry, input_names,output_names, 'Validation');
 N = size(es_train{1},1);
 %% normalize data
 [d_mean, d_std] = utils.get_mean_std(ds_train);

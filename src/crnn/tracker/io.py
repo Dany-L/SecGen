@@ -42,10 +42,10 @@ class IoTracker(BaseTracker):
             )
         elif isinstance(event, ev.SaveInitialization):
             ss = dict(
-                A=event.ss.A.detach().numpy().tolist(),
-                B=event.ss.B.detach().numpy().tolist(),
-                C=event.ss.C.detach().numpy().tolist(),
-                D=event.ss.D.detach().numpy().tolist(),
+                A=event.ss.A.cpu().detach().numpy().tolist(),
+                B=event.ss.B.cpu().detach().numpy().tolist(),
+                C=event.ss.C.cpu().detach().numpy().tolist(),
+                D=event.ss.D.cpu().detach().numpy().tolist(),
             )
             event.data["ss"] = ss
             with open(

@@ -41,7 +41,10 @@ classdef utils
         %             vector_list.append(np.diag(L, k=diag_idx))
         %
         %         return np.hstack(vector_list)
-        function [es, ds]= load_data_from_dir(directory, input_names, output_names)
+        function [es, ds]= load_data_from_dir(directory, input_names, output_names, filter)
+            if nargin < 3
+                filter = false;
+            end
             filenames = dir(directory);
             es = {}; ds = {};
             for i=1:length(filenames)
@@ -49,6 +52,12 @@ classdef utils
                 [~,~,ext] = fileparts(filename);
                 if ~strcmp(ext,'.csv')
                     continue
+                end
+
+                if filter
+                    if ~contains(filename, filter)
+                        continue
+                    end
                 end
                 tab = readtable(fullfile(directory,filename));
 

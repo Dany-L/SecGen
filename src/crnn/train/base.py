@@ -400,7 +400,7 @@ class Armijo:
         if isinstance(theta, torch.Tensor):
             ax.plot(
                 s,
-                np.vectorize(lambda s: (self.f(theta + s * dir)).detach().numpy())(s),
+                np.vectorize(lambda s: (self.f(theta + s * dir)).cpu().detach().numpy())(s),
                 label="f(x+sd)",
             )
             ax.plot(

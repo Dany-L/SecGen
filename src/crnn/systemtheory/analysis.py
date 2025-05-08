@@ -52,10 +52,10 @@ class AnalysisLti:
         self.nw = self.nz
 
         self.theta = UncertainLti(
-            ss.A.detach().numpy(),
-            ss.B.detach().numpy(),
-            ss.C.detach().numpy(),
-            ss.D.detach().numpy(),
+            ss.A.cpu().detach().numpy(),
+            ss.B.cpu().detach().numpy(),
+            ss.C.cpu().detach().numpy(),
+            ss.D.cpu().detach().numpy(),
             np.zeros((self.nx, self.nw)),
             np.zeros((self.ne, self.nw)),
             np.zeros((self.nw, self.nx)),

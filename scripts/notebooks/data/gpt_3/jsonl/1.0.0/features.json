@@ -1,0 +1,21 @@
+{
+    "featuresDict": {
+        "features": {
+            "completion": {
+                "description": "The expected completion of the promt.",
+                "pythonClassName": "tensorflow_datasets.core.features.text_feature.Text",
+                "text": {}
+            },
+            "context": {
+                "pythonClassName": "tensorflow_datasets.core.features.text_feature.Text",
+                "text": {}
+            },
+            "task": {
+                "description": "The machine learning task appearing as the name of the file.",
+                "pythonClassName": "tensorflow_datasets.core.features.text_feature.Text",
+                "text": {}
+            }
+        }
+    },
+    "pythonClassName": "tensorflow_datasets.core.features.features_dict.FeaturesDict"
+}
