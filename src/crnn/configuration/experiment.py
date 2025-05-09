@@ -4,8 +4,7 @@ from typing import Any, Dict, List, Literal
 
 from pydantic import BaseModel
 
-from ..additional_tests import (AdditionalTestConfig,
-                                retrieve_additional_test_class)
+from ..additional_tests import AdditionalTestConfig, retrieve_additional_test_class
 from ..metrics import MetricConfig, retrieve_metric_class
 from ..models import base
 from ..tracker.base import TrackerConfig, retrieve_tracker_class

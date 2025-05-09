@@ -30,6 +30,7 @@ class InputOutput:
     e: Optional[NDArray[np.float64]] = field(default_factory=lambda: np.array([0.0]))
     x0: Optional[NDArray[np.float64]] = field(default_factory=lambda: np.array([0.0]))
 
+
 @dataclass
 class InputOutputList:
     d: List[NDArray[np.float64]]

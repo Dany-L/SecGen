@@ -13,19 +13,23 @@ from torch.optim import Optimizer, lr_scheduler
 from torch.utils.data import DataLoader
 
 from ..configuration.experiment import BaseExperimentConfig, load_configuration
-from ..data_io import (get_result_directory_name, load_data,
-                       load_initialization, load_normalization)
+from ..data_io import (
+    get_result_directory_name,
+    load_data,
+    load_initialization,
+    load_normalization,
+)
 from ..datasets import get_datasets, get_loaders
 from ..loss import get_loss_function
 from ..models import base
-from ..models.model_io import (get_model_from_config, load_model,
-                               set_parameters_to_train)
+from ..models.model_io import get_model_from_config, load_model, set_parameters_to_train
 from ..optimizer import get_optimizer
 from ..scheduler import get_scheduler
 from ..tracker import events as ev
 from ..tracker.base import AggregatedTracker
 from ..tracker.tracker_io import get_trackers_from_config
 from ..utils import base as utils
+from ..systemtheory.analysis import get_transient_time
 
 PLOT_AFTER_EPOCHS: int = 100
 
@@ -103,6 +107,20 @@ def train(
         "train",
         dataset_dir,
     )
+
+    init_data = load_initialization(result_directory)
+
+    if not init_data.data:
+        ss = base.run_n4sid(
+            np.expand_dims(train_inputs[0], axis=0),
+            np.expand_dims(train_outputs[0], axis=0),
+            dt=experiment_config.dt,
+        )
+        tracker.track(ev.SaveInitialization("", ss, {}))
+    else:
+        ss = init_data.data["ss"]
+    transient_time = get_transient_time(ss)
+
     input_mean, input_std = utils.get_mean_std(train_inputs)
     output_mean, output_std = utils.get_mean_std(train_outputs)
     n_train_inputs = utils.normalize(train_inputs, input_mean, input_std)
@@ -156,7 +174,6 @@ def train(
             )
         ]
 
-        init_data = load_initialization(result_directory)
         (initializer, predictor) = get_model_from_config(model_config)
 
         initializer.set_lure_system()
@@ -343,7 +360,7 @@ def continue_training(
     tracker.track(ev.SaveModel("", predictor, "predictor"))
     if initializer is not None:
         tracker.track(ev.SaveModel("", initializer, "initializer"))
-    tracker.track(ev.SaveModelParameter("", predictor,'-update'))
+    tracker.track(ev.SaveModelParameter("", predictor, "-update"))
     tracker.track(ev.Log("", f"Training duration: {training_duration}"))
     tracker.track(ev.TrackMetrics("", {"training_duration": stop_time - start_time}))
     tracker.track(ev.Stop(""))
@@ -400,7 +417,9 @@ class Armijo:
         if isinstance(theta, torch.Tensor):
             ax.plot(
                 s,
-                np.vectorize(lambda s: (self.f(theta + s * dir)).cpu().detach().numpy())(s),
+                np.vectorize(
+                    lambda s: (self.f(theta + s * dir)).cpu().detach().numpy()
+                )(s),
                 label="f(x+sd)",
             )
             ax.plot(

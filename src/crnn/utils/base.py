@@ -42,7 +42,7 @@ def get_config_file_name(name: str, model_name: str) -> str:
 
 
 def get_opt_values(
-    opt_vars: Union[NDArray[np.float64], cp.Expression]
+    opt_vars: Union[NDArray[np.float64], cp.Expression],
 ) -> NDArray[np.float64]:
     if isinstance(opt_vars, cp.Expression):
         return opt_vars.value

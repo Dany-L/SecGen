@@ -241,14 +241,16 @@ class L2StableConstrainedModule(ConstrainedModule):
                 ss = init_data["ss"]
             else:
                 start_time = time.time()
-                ss = base.run_n4sid(ds, es, self.nx, 10)
+                ss = base.run_n4sid(ds, es, self.nx, None)
                 stop_time = time.time()
                 n4sid_duration = utils.get_duration_str(start_time, stop_time)
                 msg = f"n4sid: duration {n4sid_duration}"
 
-            an = ana.AnalysisLti(ss,self.nz)
-            msg_l2, add_par = an.l2(ana.SectorBounded(0, 1),self.ga2.cpu().detach().numpy())
-            msg += f' l2 analysis: {msg_l2}'
+            an = ana.AnalysisLti(ss, self.nz)
+            msg_l2, add_par = an.l2(
+                ana.SectorBounded(0, 1), self.ga2.cpu().detach().numpy()
+            )
+            msg += f" l2 analysis: {msg_l2}"
             assert add_par.ga2 <= self.ga2.cpu().detach().numpy()
 
             self.Lx.data = torch.linalg.cholesky(torch.tensor(add_par.X))
@@ -270,7 +272,7 @@ class L2StableConstrainedModule(ConstrainedModule):
 
             self.set_lure_system()
             msg_proj = self.project_parameters()
-            msg += f' proj: {msg_proj}'
+            msg += f" proj: {msg_proj}"
             self.set_lure_system()
             # assert self.check_constraints()
 

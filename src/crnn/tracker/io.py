@@ -2,10 +2,18 @@ import json
 import os
 from datetime import datetime
 
-from ..configuration.base import (FIG_FOLDER_NAME, INITIALIZATION_FILENAME,
-                                  NORMALIZATION_FILENAME, SEQ_FOLDER_NAME)
-from ..data_io import (save_input_output_to_mat, save_model,
-                       save_model_parameter, write_dict_to_json)
+from ..configuration.base import (
+    FIG_FOLDER_NAME,
+    INITIALIZATION_FILENAME,
+    NORMALIZATION_FILENAME,
+    SEQ_FOLDER_NAME,
+)
+from ..data_io import (
+    save_input_output_to_mat,
+    save_model,
+    save_model_parameter,
+    write_dict_to_json,
+)
 from ..utils import base as utils
 from ..utils import plot
 from . import events as ev
@@ -46,6 +54,7 @@ class IoTracker(BaseTracker):
                 B=event.ss.B.cpu().detach().numpy().tolist(),
                 C=event.ss.C.cpu().detach().numpy().tolist(),
                 D=event.ss.D.cpu().detach().numpy().tolist(),
+                dt=event.ss.dt,
             )
             event.data["ss"] = ss
             with open(
@@ -75,7 +84,9 @@ class IoTracker(BaseTracker):
         elif isinstance(event, ev.SaveModelParameter):
             save_model_parameter(
                 event.model,
-                os.path.join(self.directory, f"model_params-{self.model_name}{event.name_suffix}"),
+                os.path.join(
+                    self.directory, f"model_params-{self.model_name}{event.name_suffix}"
+                ),
             )
             self.write_to_logfile(
                 f"Save model parameters as mat file to {self.directory}"

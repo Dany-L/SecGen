@@ -71,7 +71,7 @@ class SaveSequences(Event):
 
 @dataclasses.dataclass
 class SaveModelParameter(ModelEvent):
-    name_suffix: str = ''
+    name_suffix: str = ""
 
 
 @dataclasses.dataclass

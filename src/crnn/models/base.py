@@ -4,6 +4,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, Type, Union
 
 import numpy as np
 import pandas as pd
+import scipy.linalg
 import torch
 import torch.nn as nn
 from jax import Array
@@ -11,10 +12,14 @@ from jax.typing import ArrayLike
 from nfoursid.nfoursid import NFourSID
 from numpy.typing import NDArray
 from pydantic import BaseModel
+import cvxpy as cp
+import scipy.linalg as la
+import scipy.signal as sig
 
 from ..configuration.base import InitializationData
 
 MAX_SAMPLES_N4SID = 45000
+
 
 @dataclass
 class LureSystemClass:
@@ -52,7 +57,7 @@ class DynamicIdentificationModel(ABC):
         init_data: Dict[str, Any],
     ) -> InitializationData:
         self.set_lure_system()
-        return InitializationData('Standard initialization of parameters.', {})
+        return InitializationData("Standard initialization of parameters.", {})
 
     @abstractmethod
     def sdp_constraints(self) -> List[Callable]:
@@ -106,7 +111,12 @@ class DynamicIdentificationModel(ABC):
 
 class Linear(nn.Module):
     def __init__(
-        self, A: torch.Tensor, B: torch.Tensor, C: torch.Tensor, D: torch.Tensor
+        self,
+        A: torch.Tensor,
+        B: torch.Tensor,
+        C: torch.Tensor,
+        D: torch.Tensor,
+        dt: torch.tensor = 0.0,
     ) -> None:
         super().__init__()
         self._nx = A.shape[0]
@@ -117,6 +127,7 @@ class Linear(nn.Module):
         self.B = B
         self.C = C
         self.D = D
+        self.dt = dt
 
     def _init_weights(self) -> None:
         for p in self.parameters():
@@ -232,7 +243,8 @@ def get_lure_matrices(
 def run_n4sid(
     ds: NDArray[np.float64],
     es: NDArray[np.float64],
-    nx=5,
+    dt: np.float64,
+    nx=None,
     num_block_rows=1,
 ) -> Linear:
 
@@ -240,9 +252,9 @@ def run_n4sid(
     M = len(ds)
     _, ne = es[0].shape
 
-    f = MAX_SAMPLES_N4SID / (N*M)
-    if f < 1:        
-        M_sub = np.max([int(f * M),1])
+    f = MAX_SAMPLES_N4SID / (N * M)
+    if f < 1:
+        M_sub = np.max([int(f * M), 1])
         idx = np.random.choice(range(M), M_sub)
     else:
         idx = range(M)
@@ -261,16 +273,307 @@ def run_n4sid(
     d = np.vstack(ds_sub)
     e = np.vstack(es_sub)
 
-    io_data = pd.DataFrame(np.hstack([d, e]), columns=input_names + output_names)
-    n4sid = NFourSID(
-        io_data,
-        input_columns=input_names,
-        output_columns=output_names,
-        num_block_rows=num_block_rows
-    )
-    n4sid.subspace_identification()
-    ss, _ = n4sid.system_identification(rank=nx)
+    if nx is None:
+        nx = int(np.max([len(input_names), len(output_names)]))
+
+    # io_data = pd.DataFrame(np.hstack([d, e]), columns=input_names + output_names)
+    # n4sid = NFourSID(
+    #     io_data,
+    #     input_columns=input_names,
+    #     output_columns=output_names,
+    #     num_block_rows=num_block_rows
+    # )
+
+    A, B, C, D, Cov, S = N4SID(d.T, e.T, nx, require_stable=True)
+
+    # n4sid.subspace_identification()
+    # ss, _ = n4sid.system_identification(rank=nx)
 
     return Linear(
-        torch.tensor(ss.a), torch.tensor(ss.b), torch.tensor(ss.c), torch.tensor(ss.d)
+        torch.tensor(A), torch.tensor(B), torch.tensor(C), torch.tensor(D), dt
     )
+
+
+def N4SID(u, y, NSig, NumRows=None, NumCols=None, require_stable=False):
+    # from https://github.com/AndyLamperski/pyN4SID
+    """
+    Estimate discrete-time state-space model using the N4SID method.
+
+    Inputs:
+        u, y           - Input/output data arrays (shape: [n_channels, time_steps])
+        NumRows        - Number of block rows (past horizon)
+        NumCols        - Number of block columns (future horizon)
+        NSig           - Desired model order (number of states)
+        require_stable - If True, enforce discrete-time A-matrix stability
+
+    Returns:
+        A, B, C, D - State-space matrices
+        Cov       - Covariance matrix of residuals
+        Sigma     - Singular values from the SVD (for model order selection)
+    """
+
+    NumInputs = u.shape[0]
+    NumOutputs = y.shape[0]
+
+    # Check that there's enough data
+    NumVals = u.shape[1]
+
+    if NumRows is None and NumCols is None:
+        NumRows = 2 * NSig
+        NumCols = NumVals - 2 * NumRows + 1
+
+    assert (
+        NumVals >= 2 * NumRows + NumCols - 1
+    ), "Insufficient data length for the given NumRows and NumCols."
+
+    # Build dimension dictionary for preprocessing
+    NumDict = {
+        "Inputs": NumInputs,
+        "Outputs": NumOutputs,
+        "Dimension": NSig,
+        "Rows": NumRows,
+        "Columns": NumCols,
+    }
+
+    # Preprocess the input/output to get regression matrices
+    GammaDict, Sigma = preProcess(u, y, NumDict)
+
+    GamData = GammaDict["Data"]  # Regressor matrix
+    GamYData = GammaDict["DataY"]  # Target (shifted Gamma * state + Yfuture)
+
+    if not require_stable:
+        # Standard least squares regression
+        K = la.lstsq(GamData.T, GamYData.T)[0].T
+    else:
+        # Constrained least squares with Lyapunov stability (A-matrix)
+        Kvar = cp.Variable((NSig + NumOutputs, GamData.shape[0]))
+        Avar = Kvar[:NSig, :NSig]
+        Pvar = cp.Variable((NSig, NSig), PSD=True)
+
+        LyapBlock = cp.bmat([[Pvar, Avar], [Avar.T, np.eye(NSig)]])
+        constraints = [LyapBlock >> 0, Pvar << np.eye(NSig)]
+
+        residual = GamYData - Kvar @ GamData
+        objective = cp.Minimize(cp.norm(residual, "fro"))
+
+        problem = cp.Problem(objective, constraints)
+        result = problem.solve()
+
+        if Kvar.value is None:
+            raise RuntimeError(
+                "CVXPY failed to solve the stability-constrained problem."
+            )
+        K = Kvar.value
+
+    A, B, C, D, Cov = postProcess(K, GammaDict, NumDict)
+
+    return A, B, C, D, Cov, Sigma
+
+
+def getHankelMatrices(x, NumRows, NumCols, blockWidth=1):
+    """
+    Creates past and future block Hankel matrices from signal `x`.
+    x: signal array of shape [n_signals, T]
+    Returns: XPast, XFuture
+    """
+    bh = x.shape[0]
+    xPastLeft = blockTranspose(x[:, :NumRows], blockHeight=bh, blockWidth=blockWidth)
+    XPast = blockHankel(
+        xPastLeft, x[:, NumRows - 1 : NumRows - 1 + NumCols], blockHeight=bh
+    )
+
+    xFutureLeft = blockTranspose(
+        x[:, NumRows : 2 * NumRows], blockHeight=bh, blockWidth=blockWidth
+    )
+    XFuture = blockHankel(
+        xFutureLeft, x[:, 2 * NumRows - 1 : 2 * NumRows - 1 + NumCols], blockHeight=bh
+    )
+
+    return XPast, XFuture
+
+
+def preProcess(u, y, NumDict):
+    NumInputs = u.shape[0]
+    NumOutputs = y.shape[0]
+    NumRows = NumDict["Rows"]
+    NumCols = NumDict["Columns"]
+    NSig = NumDict["Dimension"]
+
+    UPast, UFuture = getHankelMatrices(u, NumRows, NumCols)
+    YPast, YFuture = getHankelMatrices(y, NumRows, NumCols)
+
+    Data = np.vstack((UPast, UFuture, YPast))
+    L = la.lstsq(Data.T, YFuture.T)[0].T
+    Z = L @ Data
+
+    DataShift = np.vstack((UPast, UFuture[NumInputs:], YPast))
+    LShift = la.lstsq(DataShift.T, YFuture[NumOutputs:].T)[0].T
+    ZShift = LShift @ DataShift
+
+    L1 = L[:, : NumInputs * NumRows]
+    L3 = L[:, 2 * NumInputs * NumRows :]
+
+    LPast = np.hstack((L1, L3))
+    DataPast = np.vstack((UPast, YPast))
+
+    U_svd, S, Vt = la.svd(LPast @ DataPast)
+    Sig = np.diag(S[:NSig])
+    SigRt = np.sqrt(Sig)
+    Gamma = U_svd[:, :NSig] @ SigRt
+    GammaLess = Gamma[:-NumOutputs, :]
+
+    GammaPinv = la.pinv(Gamma)
+    GammaLessPinv = la.pinv(GammaLess)
+
+    GamShiftSolve = la.lstsq(GammaLess, ZShift)[0]
+    GamSolve = la.lstsq(Gamma, Z)[0]
+
+    GamData = np.vstack((GamSolve, UFuture))
+    GamYData = np.vstack((GamShiftSolve, YFuture[:NumOutputs]))
+
+    GammaDict = {
+        "Data": GamData,
+        "DataLess": GammaLess,
+        "DataY": GamYData,
+        "Pinv": GammaPinv,
+        "LessPinv": GammaLessPinv,
+    }
+    return GammaDict, S
+
+
+def blockTranspose(M, blockHeight, blockWidth):
+    """
+    Rearranges blocks in a matrix (no transpose of inner blocks).
+    Converts (r x c) into (blockHeight*blockCols x blockWidth*blockRows).
+    """
+    r, c = M.shape
+    assert r % blockHeight == 0 and c % blockWidth == 0, "Incompatible block size"
+    Nr = r // blockHeight
+    Nc = c // blockWidth
+
+    Mblock = np.zeros((Nr, Nc, blockHeight, blockWidth))
+    for i in range(Nr):
+        for j in range(Nc):
+            Mblock[i, j] = M[
+                i * blockHeight : (i + 1) * blockHeight,
+                j * blockWidth : (j + 1) * blockWidth,
+            ]
+
+    MtBlock = np.transpose(Mblock, (1, 0, 2, 3))  # Swap blocks (rows <-> cols)
+    return block2mat(MtBlock)
+
+
+def blockHankel(Hleft, Hbot=None, blockHeight=1):
+    """
+    Constructs a block Hankel matrix from left and optional bottom blocks.
+    Hleft: (Nr * bh) x bw
+    Hbot: optional (bh x Nc * bw)
+    Returns: full Hankel matrix as 2D array
+    """
+    blockWidth = Hleft.shape[1]
+    Nr = Hleft.shape[0] // blockHeight
+    Nc = Nr if Hbot is None else Hbot.shape[1] // blockWidth
+
+    LeftBlock = np.zeros((Nr, blockHeight, blockWidth))
+    for i in range(Nr):
+        LeftBlock[i] = Hleft[i * blockHeight : (i + 1) * blockHeight, :]
+
+    MBlock = np.zeros((Nr, Nc, blockHeight, blockWidth))
+
+    for k in range(min(Nc, Nr)):
+        MBlock[: Nr - k, k] = LeftBlock[k:]
+
+    if Hbot is not None:
+        BotBlock = np.zeros((Nc, blockHeight, blockWidth))
+        for i in range(Nc):
+            BotBlock[i] = Hbot[:, i * blockWidth : (i + 1) * blockWidth]
+
+        for k in range(max(1, Nc - Nr), Nc):
+            MBlock[Nr - Nc + k, Nc - k :] = BotBlock[1 : k + 1]
+
+    return block2mat(MBlock)
+
+
+def block2mat(Mblock):
+    Nr, Nc, bh, bw = Mblock.shape
+    M = np.zeros((Nr * bh, Nc * bw))
+    for i in range(Nr):
+        for j in range(Nc):
+            M[i * bh : (i + 1) * bh, j * bw : (j + 1) * bw] = Mblock[i, j]
+    return M
+
+
+def postProcess(K, GammaDict, NumDict):
+    """
+    Recover state-space matrices (A, B, C, D) and output noise covariance from identified data.
+
+    Parameters:
+        K          : System matrix from preProcess or optimization [ (n + p) x (n + mN) ]
+        GammaDict  : Dictionary with state sequence and its pseudoinverses from preProcess
+        NumDict    : Dictionary with model dimensions: Rows, Columns, Inputs, Outputs, Dimension
+
+    Returns:
+        AID, BID, CID, DID, CovID
+    """
+    GamData = GammaDict["Data"]
+    GamYData = GammaDict["DataY"]
+    GammaPinv = GammaDict["Pinv"]
+    GammaLessPinv = GammaDict["LessPinv"]
+    GammaLess = GammaDict["DataLess"]
+
+    NSig = NumDict["Dimension"]
+    NumRows = NumDict["Rows"]
+    NumCols = NumDict["Columns"]
+    NumInputs = NumDict["Inputs"]
+    NumOutputs = NumDict["Outputs"]
+
+    # --- Extract A and C
+    AID = K[:NSig, :NSig]
+    CID = K[NSig:, :NSig]
+
+    # --- Innovation covariance
+    rho = GamYData - K @ GamData
+    CovID = rho @ rho.T / NumCols
+
+    # --- Build L matrix
+    AC = np.vstack((AID, CID))  # shape: (n+p) x n
+    L = AC @ GammaPinv  # shape: (n+p) x (N * p)
+
+    # --- Build Hankel subtraction matrices
+    M = np.zeros((NSig, NumRows * NumOutputs))
+    M[:, NumOutputs:] = GammaLessPinv
+
+    Mleft = blockTranspose(M, NSig, NumOutputs)
+    LtopLeft = blockTranspose(L[:NSig], NSig, NumOutputs)
+
+    NTop = blockHankel(Mleft, blockHeight=NSig) - blockHankel(
+        LtopLeft, blockHeight=NSig
+    )
+
+    LbotLeft = blockTranspose(L[NSig:], NumOutputs, NumOutputs)
+    NBot = -blockHankel(LbotLeft, blockHeight=NumOutputs)
+    NBot[:NumOutputs, :NumOutputs] += np.eye(NumOutputs)
+
+    N = np.vstack((NTop, NBot)) @ la.block_diag(np.eye(NumOutputs), GammaLess)
+
+    # --- Build input gain matrix from K
+    Kr = K[:, NSig:]  # shape: (n + p) x (N * m)
+    KsTop = np.zeros((NSig * NumRows, NumInputs))
+    KsBot = np.zeros((NumOutputs * NumRows, NumInputs))
+
+    for k in range(NumRows):
+        KsTop[k * NSig : (k + 1) * NSig] = Kr[
+            :NSig, k * NumInputs : (k + 1) * NumInputs
+        ]
+        KsBot[k * NumOutputs : (k + 1) * NumOutputs] = Kr[
+            NSig:, k * NumInputs : (k + 1) * NumInputs
+        ]
+
+    Ks = np.vstack((KsTop, KsBot))
+
+    # --- Solve for B and D
+    DB = la.lstsq(N, Ks)[0]
+    DID = DB[:NumOutputs]
+    BID = DB[NumOutputs:]
+
+    return AID, BID, CID, DID, CovID

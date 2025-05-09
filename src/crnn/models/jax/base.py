@@ -1,6 +1,5 @@
 from functools import partial
-from typing import (Any, Callable, Dict, List, Literal, Optional, Tuple, Type,
-                    Union)
+from typing import Any, Callable, Dict, List, Literal, Optional, Tuple, Type, Union
 
 import cvxpy as cp
 import jax.numpy as jnp

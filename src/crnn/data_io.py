@@ -9,18 +9,23 @@ import torch
 from numpy.typing import NDArray
 from scipy.io import loadmat, savemat
 
-from .configuration.base import (DATASET_DIR_ENV_VAR, INITIALIZATION_FILENAME,
-                                 NORMALIZATION_FILENAME, PROCESSED_FOLDER_NAME, InitializationData,
-                                 InputOutput, Normalization,
-                                 NormalizationParameters, InputOutputList)
+from .configuration.base import (
+    DATASET_DIR_ENV_VAR,
+    INITIALIZATION_FILENAME,
+    NORMALIZATION_FILENAME,
+    PROCESSED_FOLDER_NAME,
+    InitializationData,
+    InputOutput,
+    Normalization,
+    NormalizationParameters,
+    InputOutputList,
+)
 from .models import base as base
 from .models.jax import base as base_jax
 from .models.jax.recurrent import get_matrices_from_flat_theta
 from .models.torch import base as base_torch
 
 import nonlinear_benchmarks
-
-
 
 
 def load_data(
@@ -47,19 +52,23 @@ def load_data(
         # check if dataset is available in nonlinear_benchmarks
         dataset_name = os.path.basename(os.path.dirname(os.path.dirname(dataset_dir)))
         if not hasattr(nonlinear_benchmarks, dataset_name):
-            raise ValueError(f'Dataset files do not exist and is not part of the nonlinear benchmarks {dataset_dir} {dataset_name}')
+            raise ValueError(
+                f"Dataset files do not exist and is not part of the nonlinear benchmarks {dataset_dir} {dataset_name}"
+            )
         else:
             # We use the convention that the dataset directory must match an existing nonlinear benchmark name
-            # as of Feb 2025 the current names are supported 
+            # as of Feb 2025 the current names are supported
             # CED, Cascaded_Tanks, EMPS, Silverbox, WienerHammerBenchMark, ParWH, F16
             cls = getattr(nonlinear_benchmarks, dataset_name)
             return load_data_from_nonlinear_benchmarks(type_path, cls)
 
     else:
-        return load_data_from_folder(type_path,input_names,output_names)
+        return load_data_from_folder(type_path, input_names, output_names)
 
 
-def load_data_from_nonlinear_benchmarks(type_dir: str, dataset: Callable, val_split:float = 0.1 ) -> InputOutputList:
+def load_data_from_nonlinear_benchmarks(
+    type_dir: str, dataset: Callable, val_split: float = 0.1
+) -> InputOutputList:
     dataset_dir = os.path.dirname(type_dir)
     train_val, test = dataset(atleast_2d=True, always_return_tuples_of_datasets=True)
     datasetname = dataset.__name__
@@ -68,60 +77,94 @@ def load_data_from_nonlinear_benchmarks(type_dir: str, dataset: Callable, val_sp
     _, nd = train_val[0].u.shape
     M_train_val, M_test = len(train_val), len(test)
 
-    input_names = [f'u_{idx+1}' for idx in range(nd)]
-    output_names = [f'y_{idx+1}' for idx in range(ne)]
+    input_names = [f"u_{idx+1}" for idx in range(nd)]
+    output_names = [f"y_{idx+1}" for idx in range(ne)]
 
     for m in range(M_train_val):
-        write_train_val_data_to_csv_file(train_val[m],val_split,m,datasetname,dataset_dir, input_names, output_names, nd, ne)
+        write_train_val_data_to_csv_file(
+            train_val[m],
+            val_split,
+            m,
+            datasetname,
+            dataset_dir,
+            input_names,
+            output_names,
+            nd,
+            ne,
+        )
 
     for m in range(M_test):
-        write_test_data_to_csv_file(test[m],m,datasetname,dataset_dir, input_names, output_names, nd, ne)
+        write_test_data_to_csv_file(
+            test[m], m, datasetname, dataset_dir, input_names, output_names, nd, ne
+        )
 
     return load_data_from_folder(type_dir, input_names, output_names)
 
-def write_test_data_to_csv_file(data:nonlinear_benchmarks.Input_output_data, idx:int, datasetname:str, dataset_dir:str, input_names:List[str], output_names:List[str], nd:int, ne:int) -> None:
+
+def write_test_data_to_csv_file(
+    data: nonlinear_benchmarks.Input_output_data,
+    idx: int,
+    datasetname: str,
+    dataset_dir: str,
+    input_names: List[str],
+    output_names: List[str],
+    nd: int,
+    ne: int,
+) -> None:
     N_test = len(data)
     data.u = data.u.reshape(N_test, nd)
     data.y = data.y.reshape(N_test, ne)
 
     test_data = pd.DataFrame(
-        np.hstack([data.u, data.y]),
-        columns=input_names+output_names
+        np.hstack([data.u, data.y]), columns=input_names + output_names
     )
 
-    directory = os.path.join(dataset_dir, 'test')
+    directory = os.path.join(dataset_dir, "test")
     os.makedirs(directory, exist_ok=True)
-    full_filename = os.path.join(directory, f'{datasetname}-{idx}.csv')
+    full_filename = os.path.join(directory, f"{datasetname}-{idx}.csv")
     test_data.to_csv(full_filename)
 
-def write_train_val_data_to_csv_file(data:nonlinear_benchmarks.Input_output_data, val_split:float, idx:int, datasetname:str, dataset_dir:str, input_names:List[str], output_names:List[str], nd:int, ne:int) -> None:
+
+def write_train_val_data_to_csv_file(
+    data: nonlinear_benchmarks.Input_output_data,
+    val_split: float,
+    idx: int,
+    datasetname: str,
+    dataset_dir: str,
+    input_names: List[str],
+    output_names: List[str],
+    nd: int,
+    ne: int,
+) -> None:
     N_train_val = len(data)
-    N_train = int(N_train_val*(1-val_split))
+    N_train = int(N_train_val * (1 - val_split))
 
     data.u = data.u.reshape(N_train_val, nd)
     data.y = data.y.reshape(N_train_val, ne)
 
     train_data = pd.DataFrame(
         np.hstack([data.u[:N_train], data.y[:N_train]]),
-        columns=input_names+output_names
+        columns=input_names + output_names,
     )
     val_data = pd.DataFrame(
         np.hstack([data.u[N_train:], data.y[N_train:]]),
-        columns=input_names+output_names
+        columns=input_names + output_names,
     )
 
-    for data, t in zip([train_data, val_data], ['train', 'validation']):
+    for data, t in zip([train_data, val_data], ["train", "validation"]):
         directory = os.path.join(dataset_dir, t)
         os.makedirs(directory, exist_ok=True)
-        full_filename = os.path.join(directory, f'{datasetname}-{idx}.csv')
+        full_filename = os.path.join(directory, f"{datasetname}-{idx}.csv")
         data.to_csv(full_filename)
 
-def load_data_from_folder(data_folder:str,
-    input_names: List[str],
-    output_names: List[str]
+
+def load_data_from_folder(
+    data_folder: str, input_names: List[str], output_names: List[str]
 ) -> InputOutputList:
     all_files: List[str] = [
-        os.path.join(data_folder, f) for f in os.listdir(data_folder) if f.endswith(".csv")
+        os.path.join(data_folder, f)
+        for f in os.listdir(data_folder)
+        if f.endswith(".csv")
     ]
     if not all_files:
         raise ValueError(f"No CSV files found in type {type}.")
@@ -291,6 +334,7 @@ def load_initialization(directory: str) -> InitializationData:
                     torch.tensor(initialization["ss"]["B"]),
                     torch.tensor(initialization["ss"]["C"]),
                     torch.tensor(initialization["ss"]["D"]),
+                    dt=initialization["ss"]["dt"],
                 )
             },
         )

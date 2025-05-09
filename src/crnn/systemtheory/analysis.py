@@ -4,10 +4,14 @@ from typing import Optional, Tuple
 import cvxpy as cp
 import numpy as np
 from numpy.typing import NDArray
+import scipy.signal as sig
+import matplotlib.pyplot as plt
 
 from ..models import base
 from ..utils import base as utils
 from ..utils import transformation as trans
+
+SETTLING_TIME_THRESHOLD = 0.02
 
 
 @dataclasses.dataclass
@@ -74,7 +78,7 @@ class AnalysisLti:
             ga2_m = -ga2 * np.eye(self.nd)
 
         # la = cp.Variable((self.nw, 1))
-        la = np.ones((self.nw,1))
+        la = np.ones((self.nw, 1))
         L = cp.diag(la)
         L1 = trans.bmat(
             [
@@ -141,7 +145,7 @@ class AnalysisLti:
         problem = cp.Problem(
             cp.Minimize(cp.norm(X)),
             [
-                F << -eps * np.eye(nF), 
+                F << -eps * np.eye(nF),
                 X >> eps * np.eye(self.nx),
             ],
         )
@@ -150,23 +154,36 @@ class AnalysisLti:
             problem.solve(solver=self.sdp_opt)
         except cp.SolverError:
             Warning(f"cvxpy failed. {cp.SolverError}")
-            return (problem.status, AdditionalParameters(
-                np.eye(self.nw), np.eye(self.nx), np.array([[1.0]])
-            ))
+            return (
+                problem.status,
+                AdditionalParameters(
+                    np.eye(self.nw), np.eye(self.nx), np.array([[1.0]])
+                ),
+            )
         if not problem.status == "optimal":
-            
+
             Warning(f"cvxpy did not find a solution. {problem.status}")
-            return (problem.status, AdditionalParameters(
-                np.eye(self.nw), np.eye(self.nx), np.array([[1.0]])
-            ))
-        print(f'norm L {np.linalg.norm(L.value,2)}, norm X {np.linalg.norm(X.value,2)}')
+            return (
+                problem.status,
+                AdditionalParameters(
+                    np.eye(self.nw), np.eye(self.nx), np.array([[1.0]])
+                ),
+            )
+        print(f"norm L {np.linalg.norm(L.value,2)}, norm X {np.linalg.norm(X.value,2)}")
 
         # assert self.sanity_check(X.value, ga2.value, L.value, uncertainty)
-        assert self.sanity_check(X.value, utils.get_opt_values(ga2), L.value, uncertainty)
+        assert self.sanity_check(
+            X.value, utils.get_opt_values(ga2), L.value, uncertainty
+        )
 
-        return (problem.status, AdditionalParameters(
-            utils.get_opt_values(L), utils.get_opt_values(X), utils.get_opt_values(ga2)
-        ))
+        return (
+            problem.status,
+            AdditionalParameters(
+                utils.get_opt_values(L),
+                utils.get_opt_values(X),
+                utils.get_opt_values(ga2),
+            ),
+        )
 
     def sanity_check(self, X, ga2, L, uncertainty) -> bool:
         L1 = trans.bmat(
@@ -264,3 +281,58 @@ class AnalysisLti:
         except np.linalg.LinAlgError:
             return False
         return True
+
+
+def get_transient_time(ss: base.Linear) -> np.float64:
+
+    def get_transient_from_step_response(n, plot=False):
+        t, y = sig.dstep(
+            (
+                ss.A.detach().numpy(),
+                ss.B.detach().numpy(),
+                ss.C.detach().numpy(),
+                ss.D.detach().numpy(),
+                ss.dt,
+            ),
+            n=n,
+        )
+        e = np.abs(y[0].T - steady_state)
+        e_max = np.max(e, axis=1).reshape(-1, 1)
+        transient_time = np.argmax(e < e_max * SETTLING_TIME_THRESHOLD, axis=1)
+        if plot:
+            fig, ax = plt.subplots(figsize=(10, 4))
+            ax.plot(t, y[0])
+            for e_i in e_max:
+                ax.plot(t, np.ones_like(t) * e_i - e_i * SETTLING_TIME_THRESHOLD)
+            for i, e_i in enumerate(transient_time):
+                ax.scatter(e_i * ss.dt, y[0][e_i, i])
+            plt.savefig(f"step_{n}.png")
+
+        return np.argmax(e < e_max * SETTLING_TIME_THRESHOLD, axis=1), e, e_max
+
+    steady_state = get_steady_state(ss)
+    n = 100
+    transient_time, e, e_max = get_transient_from_step_response(n)
+    while np.all(e > e_max * SETTLING_TIME_THRESHOLD) or n > 1000:
+        n += 100
+        transient_time, e, e_max = get_transient_from_step_response(n, plot=False)
+
+    if n > 1000:
+        raise ValueError("No reasonable transient time could be calculated.")
+
+    return transient_time * ss.dt
+
+
+def get_steady_state(
+    ss: base.Linear, u: NDArray[np.float64] = None
+) -> NDArray[np.float64]:
+    nd = ss.B.shape[1]
+    if u is None:
+        u = np.ones((nd, 1))
+    nx = ss.A.shape[0]
+    return (
+        -ss.C.cpu().detach().numpy()
+        @ np.linalg.inv(ss.A.cpu().detach().numpy() - np.eye(nx))
+        @ ss.B.detach().numpy()
+        + ss.D.cpu().detach().numpy()
+    ) @ u
