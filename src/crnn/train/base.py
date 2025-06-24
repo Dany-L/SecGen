@@ -111,24 +111,26 @@ def train(
         "train",
         dataset_dir,
     )
+    tracker.track(ev.Log("", f'Training samples: {np.sum([train_input.shape[0] for train_input in train_inputs])}'))
 
-    init_data = load_initialization(result_directory)
 
-    if not init_data.data:
-        ss = base.run_n4sid(
-            np.expand_dims(train_inputs[0], axis=0),
-            np.expand_dims(train_outputs[0], axis=0),
-            dt=experiment_config.dt,
-        )
-        tracker.track(ev.SaveInitialization("", ss, {}))
-    else:
-        ss = init_data.data["ss"]
-    transient_time = np.max(get_transient_time(ss)/experiment_config.dt)
-    horizon = int((2*transient_time)*1.05)
-    window = int(0.1*horizon)
+    # init_data = load_initialization(result_directory)
 
-    tracker.track(ev.Log("", f"window: {window}, horizon: {horizon}"))
+    # if not init_data.data:
+    #     ss = base.run_n4sid(
+    #         np.expand_dims(train_inputs[0], axis=0),
+    #         np.expand_dims(train_outputs[0], axis=0),
+    #         dt=experiment_config.dt,
+    #     )
+    #     tracker.track(ev.SaveInitialization("", ss, {}))
+    # else:
+    #     ss = init_data.data["ss"]
+    # transient_time = np.max(get_transient_time(ss)/experiment_config.dt)
+    # horizon = int((2*transient_time)*1.05)
+    # window = int(0.1*horizon)
+    window = experiment_config.window
 
+    # tracker.track(ev.Log("", f"window: {window}, horizon: {horizon}"))
 
     val_inputs, val_outputs = load_data(
         experiment_config.input_names,
@@ -136,14 +138,15 @@ def train(
         "validation",
         dataset_dir,
     )
+    tracker.track(ev.Log("", f'Validation samples: {np.sum([val_input.shape[0] for val_input in val_inputs])}'))
 
-    D_ood, D_test, D_val = process_data(train_inputs+val_inputs, train_outputs+val_outputs, window, horizon)
+    # D_ood, D_test, D_val = process_data(train_inputs+val_inputs, train_outputs+val_outputs, window, horizon)
  
-    train_inputs, train_outputs = D_test
-    val_inputs, val_outputs = D_val
-    ood_input, ood_output = D_ood
+    # train_inputs, train_outputs = D_test
+    # val_inputs, val_outputs = D_val
+    # ood_input, ood_output = D_ood
 
-    save_trajectories_to_csv(ood_input, ood_output,experiment_config.input_names, experiment_config.output_names,os.path.join(dataset_dir, 'ood'))
+    # save_trajectories_to_csv(ood_input, ood_output,experiment_config.input_names, experiment_config.output_names,os.path.join(dataset_dir, 'ood'))
 
     input_mean, input_std = utils.get_mean_std(train_inputs)
     output_mean, output_std = utils.get_mean_std(train_outputs)
@@ -188,13 +191,13 @@ def train(
                 batch_size,
                 device,
             )
-            for inp, output, batch_size in zip(
+            for inp, output, horizon, batch_size in zip(
                 [n_train_inputs, n_val_inputs],
                 [n_train_outputs, n_val_outputs],
-                # [
-                #     experiment_config.horizons.training,
-                #     experiment_config.horizons.validation,
-                # ],
+                [
+                    experiment_config.horizons.training,
+                    experiment_config.horizons.validation,
+                ],
                 [experiment_config.batch_size, 1],
             )
         ]
@@ -202,12 +205,12 @@ def train(
         (initializer, predictor) = get_model_from_config(model_config)
 
         initializer.set_lure_system()
-        init_data = predictor.initialize_parameters(
-            n_train_inputs, n_train_outputs, init_data.data
-        )
-        tracker.track(ev.Log("", init_data.msg))
-        if init_data.data:
-            tracker.track(ev.SaveInitialization("", init_data.data["ss"], {}))
+        # init_data = predictor.initialize_parameters(
+        #     n_train_inputs, n_train_outputs, init_data.data
+        # )
+        # tracker.track(ev.Log("", init_data.msg))
+        # if init_data.data:
+        #     tracker.track(ev.SaveInitialization("", init_data.data["ss"], {}))
         optimizers = get_optimizer(experiment_config, (initializer, predictor))
         schedulers = get_scheduler(optimizers)
 
@@ -227,30 +230,6 @@ def train(
             loss_function=loss_fcn,
             schedulers=schedulers,
             tracker=tracker,
-            raw_data={
-                'data':{
-                    'train': {
-                        'input': train_inputs, 
-                        'output': train_outputs
-                    },
-                    'validation': {
-                        'input': val_inputs, 
-                        'output': val_outputs
-                    }
-                },
-                'horizon': horizon,
-                'window': window,
-                'normalization': {
-                    'input': {
-                          'mean': input_mean, 
-                          'std': input_std
-                    },
-                    'output': {
-                          'mean': output_mean, 
-                          'std': output_std
-                    },
-                }
-            }
         )
     stop_time = time.time()
     training_duration = utils.get_duration_str(start_time, stop_time)
