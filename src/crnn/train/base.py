@@ -2,7 +2,7 @@ import json
 import os
 import time
 from abc import ABC, abstractmethod
-from typing import Callable, List, Optional, Tuple, Type
+from typing import Callable, List, Optional, Tuple, Type, Dict, Any
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -13,11 +13,14 @@ from torch.optim import Optimizer, lr_scheduler
 from torch.utils.data import DataLoader
 
 from ..configuration.experiment import BaseExperimentConfig, load_configuration
+from ..configuration.base import InputOutputList
 from ..data_io import (
     get_result_directory_name,
     load_data,
     load_initialization,
     load_normalization,
+    process_data,
+    save_trajectories_to_csv
 )
 from ..datasets import get_datasets, get_loaders
 from ..loss import get_loss_function
@@ -50,6 +53,7 @@ class InitPred(ABC):
         schedulers: List[lr_scheduler.ReduceLROnPlateau],
         tracker: AggregatedTracker = AggregatedTracker(),
         initialize: bool = True,
+        raw_data: Dict[str, Any] = None
     ) -> Tuple[Optional[base.DynamicIdentificationModel]]:
         pass
 
@@ -119,7 +123,27 @@ def train(
         tracker.track(ev.SaveInitialization("", ss, {}))
     else:
         ss = init_data.data["ss"]
-    transient_time = get_transient_time(ss)
+    transient_time = np.max(get_transient_time(ss)/experiment_config.dt)
+    horizon = int((2*transient_time)*1.05)
+    window = int(0.1*horizon)
+
+    tracker.track(ev.Log("", f"window: {window}, horizon: {horizon}"))
+
+
+    val_inputs, val_outputs = load_data(
+        experiment_config.input_names,
+        experiment_config.output_names,
+        "validation",
+        dataset_dir,
+    )
+
+    D_ood, D_test, D_val = process_data(train_inputs+val_inputs, train_outputs+val_outputs, window, horizon)
+ 
+    train_inputs, train_outputs = D_test
+    val_inputs, val_outputs = D_val
+    ood_input, ood_output = D_ood
+
+    save_trajectories_to_csv(ood_input, ood_output,experiment_config.input_names, experiment_config.output_names,os.path.join(dataset_dir, 'ood'))
 
     input_mean, input_std = utils.get_mean_std(train_inputs)
     output_mean, output_std = utils.get_mean_std(train_outputs)
@@ -150,6 +174,7 @@ def train(
     n_val_inputs = utils.normalize(val_inputs, input_mean, input_std)
     n_val_outputs = utils.normalize(val_outputs, output_mean, output_std)
 
+
     start_time = time.time()
     with torch.device(device):
         loaders = [
@@ -158,18 +183,18 @@ def train(
                     inp,
                     output,
                     horizon,
-                    experiment_config.window,
+                    window,
                 ),
                 batch_size,
                 device,
             )
-            for inp, output, horizon, batch_size in zip(
+            for inp, output, batch_size in zip(
                 [n_train_inputs, n_val_inputs],
                 [n_train_outputs, n_val_outputs],
-                [
-                    experiment_config.horizons.training,
-                    experiment_config.horizons.validation,
-                ],
+                # [
+                #     experiment_config.horizons.training,
+                #     experiment_config.horizons.validation,
+                # ],
                 [experiment_config.batch_size, 1],
             )
         ]
@@ -202,6 +227,30 @@ def train(
             loss_function=loss_fcn,
             schedulers=schedulers,
             tracker=tracker,
+            raw_data={
+                'data':{
+                    'train': {
+                        'input': train_inputs, 
+                        'output': train_outputs
+                    },
+                    'validation': {
+                        'input': val_inputs, 
+                        'output': val_outputs
+                    }
+                },
+                'horizon': horizon,
+                'window': window,
+                'normalization': {
+                    'input': {
+                          'mean': input_mean, 
+                          'std': input_std
+                    },
+                    'output': {
+                          'mean': output_mean, 
+                          'std': output_std
+                    },
+                }
+            }
         )
     stop_time = time.time()
     training_duration = utils.get_duration_str(start_time, stop_time)

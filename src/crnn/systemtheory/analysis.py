@@ -11,7 +11,7 @@ from ..models import base
 from ..utils import base as utils
 from ..utils import transformation as trans
 
-SETTLING_TIME_THRESHOLD = 0.02
+SETTLING_TIME_THRESHOLD = 0.1
 
 
 @dataclasses.dataclass

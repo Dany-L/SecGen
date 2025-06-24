@@ -8,6 +8,7 @@ import pandas as pd
 import torch
 from numpy.typing import NDArray
 from scipy.io import loadmat, savemat
+from sklearn.model_selection import train_test_split
 
 from .configuration.base import (
     DATASET_DIR_ENV_VAR,
@@ -340,3 +341,116 @@ def load_initialization(directory: str) -> InitializationData:
         )
     else:
         return InitializationData("", {})
+
+
+def split_trajectories(
+    trajectories: List[np.ndarray], segment_length: int
+) -> List[np.ndarray]:
+    """Split each trajectory into non-overlapping subtrajectories of given length."""
+    segments = []
+    for traj in trajectories:
+        num_segments = len(traj) // segment_length
+        for i in range(num_segments):
+            segment = traj[i * segment_length:(i + 1) * segment_length]
+            segments.append(segment)
+    return segments
+
+def compute_energy(
+    u_segment: np.ndarray
+) -> float:
+    """Compute energy of a signal segment as sum of squared values."""
+    return float(np.sum(u_segment ** 2))
+
+def process_data(
+    u: List[np.ndarray],
+    y: List[np.ndarray],
+    w: int,
+    h: int,
+    seed: int = 42
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Processes trajectory data by splitting, computing energy, and separating high energy sequences.
+    
+    Returns:
+        Tuple containing d_ood, training_set, validation_set
+    """
+    segment_length = w + h +1
+
+    u_segments = split_trajectories(u, segment_length)
+    y_segments = split_trajectories(y, segment_length)
+
+    # Compute energy for each segment pair
+    input_energies = [
+        compute_energy(u_seg)
+        for u_seg in u_segments
+    ]
+
+    # Sort indices by energy in descending order
+    sorted_indices = np.argsort(input_energies)[::-1]
+
+    # Top 10% high-energy samples
+    num_top = max(1, int(0.1 * len(input_energies)))
+    top_indices = sorted_indices[:num_top]
+    remaining_indices = sorted_indices[num_top:]
+
+    ood_input = [u_segments[i] for i in top_indices]
+    ood_output = [y_segments[i] for i in top_indices]
+    D_ood = (ood_input, ood_output)
+
+    remaining_input = [u_segments[i] for i in remaining_indices]
+    remaining_output =  [y_segments[i] for i in remaining_indices]
+
+    # Shuffle and split remaining data
+    d_train, d_val, e_train, e_val = train_test_split(
+        remaining_input, remaining_output,
+        test_size=0.2,
+        random_state=seed,
+        shuffle=True,
+    )
+    D_train = (d_train, e_train)
+    D_validation = (d_val, e_val)
+
+    return D_ood, D_train, D_validation
+
+def save_trajectories_to_csv(
+    ood_input: List[np.ndarray],
+    ood_output: List[np.ndarray],
+    input_columns: List[str],
+    output_columns: List[str],
+    output_dir: str
+) -> None:
+    """
+    Save each trajectory as a single CSV file with input and output signals combined.
+
+    Args:
+        ood_input: List of input trajectories (shape: [timesteps, input_dim]).
+        ood_output: List of output trajectories (shape: [timesteps, output_dim]).
+        input_columns: Column names for input signals.
+        output_columns: Column names for output signals.
+        output_dir: Directory to save the combined CSV files.
+    """
+    if os.path.exists(output_dir):
+        print('ood already exists.')
+        return
+    os.makedirs(output_dir, exist_ok=True)
+    num_trajectories = len(ood_input)
+    assert num_trajectories == len(ood_output), "Input and output lists must be the same length."
+
+    for i, (u_traj, y_traj) in enumerate(zip(ood_input, ood_output)):
+        if u_traj.shape[0] != y_traj.shape[0]:
+            raise ValueError(f"Trajectory {i} has mismatched time steps: input {u_traj.shape[0]} vs output {y_traj.shape[0]}")
+        if u_traj.shape[1] != len(input_columns):
+            raise ValueError(f"Input trajectory {i} has shape {u_traj.shape}, expected {len(input_columns)} input columns.")
+        if y_traj.shape[1] != len(output_columns):
+            raise ValueError(f"Output trajectory {i} has shape {y_traj.shape}, expected {len(output_columns)} output columns.")
+
+        # Concatenate input and output signals
+        combined = np.concatenate([u_traj, y_traj], axis=1)
+        combined_columns = input_columns + output_columns
+
+        df = pd.DataFrame(combined, columns=combined_columns)
+
+        filepath = os.path.join(output_dir, f"traj_{i:03d}.csv")
+        df.to_csv(filepath, index=False)
+
+    print(f"✅ Saved {num_trajectories} combined input/output trajectory files to '{output_dir}'")
