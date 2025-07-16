@@ -294,17 +294,25 @@ def run_n4sid(
     )
 
 
-def N4SID(u, y, NSig, NumRows=None, NumCols=None, require_stable=False):
-    # from https://github.com/AndyLamperski/pyN4SID
+def N4SID(
+    u: np.ndarray,
+    y: np.ndarray,
+    nx: int,
+    NumRows: int = None,
+    NumCols: int = None,
+    require_stable: bool = False,
+    enforce_stability_method: str = "cvxpy"
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """
     Estimate discrete-time state-space model using the N4SID method.
 
     Inputs:
         u, y           - Input/output data arrays (shape: [n_channels, time_steps])
+        nx             - Desired model order (number of states)
         NumRows        - Number of block rows (past horizon)
         NumCols        - Number of block columns (future horizon)
-        NSig           - Desired model order (number of states)
         require_stable - If True, enforce discrete-time A-matrix stability
+        enforce_stability_method - "cvxpy" (slow, constrained) or "projection" (fast)
 
     Returns:
         A, B, C, D - State-space matrices
@@ -319,7 +327,7 @@ def N4SID(u, y, NSig, NumRows=None, NumCols=None, require_stable=False):
     NumVals = u.shape[1]
 
     if NumRows is None and NumCols is None:
-        NumRows = 2 * NSig
+        NumRows = 2 * nx
         NumCols = NumVals - 2 * NumRows + 1
 
     assert (
@@ -330,7 +338,7 @@ def N4SID(u, y, NSig, NumRows=None, NumCols=None, require_stable=False):
     NumDict = {
         "Inputs": NumInputs,
         "Outputs": NumOutputs,
-        "Dimension": NSig,
+        "Dimension": nx,
         "Rows": NumRows,
         "Columns": NumCols,
     }
@@ -344,29 +352,32 @@ def N4SID(u, y, NSig, NumRows=None, NumCols=None, require_stable=False):
     if not require_stable:
         # Standard least squares regression
         K = la.lstsq(GamData.T, GamYData.T)[0].T
-    else:
+    elif enforce_stability_method == "cvxpy":
         # Constrained least squares with Lyapunov stability (A-matrix)
-        Kvar = cp.Variable((NSig + NumOutputs, GamData.shape[0]))
-        Avar = Kvar[:NSig, :NSig]
-        Pvar = cp.Variable((NSig, NSig), PSD=True)
-
-        LyapBlock = cp.bmat([[Pvar, Avar], [Avar.T, np.eye(NSig)]])
-        constraints = [LyapBlock >> 0, Pvar << np.eye(NSig)]
-
+        Kvar = cp.Variable((nx + NumOutputs, GamData.shape[0]))
+        Avar = Kvar[:nx, :nx]
+        Pvar = cp.Variable((nx, nx), PSD=True)
+        LyapBlock = cp.bmat([[Pvar, Avar], [Avar.T, np.eye(nx)]])
+        constraints = [LyapBlock >> 0, Pvar << np.eye(nx)]
         residual = GamYData - Kvar @ GamData
         objective = cp.Minimize(cp.norm(residual, "fro"))
-
         problem = cp.Problem(objective, constraints)
         result = problem.solve()
-
         if Kvar.value is None:
-            raise RuntimeError(
-                "CVXPY failed to solve the stability-constrained problem."
-            )
+            raise RuntimeError("CVXPY failed to solve the stability-constrained problem.")
         K = Kvar.value
+    elif enforce_stability_method == "projection":
+        # Fast stability enforcement: scale A to unit disc
+        K = la.lstsq(GamData.T, GamYData.T)[0].T
+        A = K[:nx, :nx]
+        eigvals = np.linalg.eigvals(A)
+        max_eig = np.max(np.abs(eigvals))
+        if max_eig > 1.0:
+            K[:nx, :nx] = A / (max_eig + 1e-6)
+    else:
+        raise ValueError(f"Unknown stability enforcement method: {enforce_stability_method}")
 
     A, B, C, D, Cov = postProcess(K, GammaDict, NumDict)
-
     return A, B, C, D, Cov, Sigma
 
 
@@ -399,15 +410,18 @@ def preProcess(u, y, NumDict):
     NumCols = NumDict["Columns"]
     NSig = NumDict["Dimension"]
 
-    UPast, UFuture = getHankelMatrices(u, NumRows, NumCols)
-    YPast, YFuture = getHankelMatrices(y, NumRows, NumCols)
+    UPast, UFuture = getHankelMatrices(u, NumRows, NumCols) # U_0|i-1, U_i|2i-1
+    YPast, YFuture = getHankelMatrices(y, NumRows, NumCols) # Y_0|i-1
 
-    Data = np.vstack((UPast, UFuture, YPast))
-    L = la.lstsq(Data.T, YFuture.T)[0].T
+    Data = np.vstack((UPast, UFuture, YPast)) # Z_i
+    # Use lstsq with rcond=None for best performance
+    L, _, _, _ = la.lstsq(Data.T, YFuture.T, lapack_driver='gelsy')
+    L = L.T
     Z = L @ Data
 
     DataShift = np.vstack((UPast, UFuture[NumInputs:], YPast))
-    LShift = la.lstsq(DataShift.T, YFuture[NumOutputs:].T)[0].T
+    LShift, _, _, _ = la.lstsq(DataShift.T, YFuture[NumOutputs:].T, lapack_driver='gelsy')
+    LShift = LShift.T
     ZShift = LShift @ DataShift
 
     L1 = L[:, : NumInputs * NumRows]
@@ -416,17 +430,16 @@ def preProcess(u, y, NumDict):
     LPast = np.hstack((L1, L3))
     DataPast = np.vstack((UPast, YPast))
 
-    U_svd, S, Vt = la.svd(LPast @ DataPast)
-    Sig = np.diag(S[:NSig])
-    SigRt = np.sqrt(Sig)
-    Gamma = U_svd[:, :NSig] @ SigRt
+    # Use economy SVD
+    U_svd, S, Vt = la.svd(LPast @ DataPast, full_matrices=False)
+    Gamma = U_svd[:, :NSig] * np.sqrt(S[:NSig])
     GammaLess = Gamma[:-NumOutputs, :]
 
-    GammaPinv = la.pinv(Gamma)
-    GammaLessPinv = la.pinv(GammaLess)
+    GammaPinv = la.pinv(Gamma, atol=1e-8)
+    GammaLessPinv = la.pinv(GammaLess, atol=1e-8)
 
-    GamShiftSolve = la.lstsq(GammaLess, ZShift)[0]
-    GamSolve = la.lstsq(Gamma, Z)[0]
+    GamShiftSolve, _, _, _ = la.lstsq(GammaLess, ZShift, lapack_driver='gelsy')
+    GamSolve, _, _, _ = la.lstsq(Gamma, Z, lapack_driver='gelsy')
 
     GamData = np.vstack((GamSolve, UFuture))
     GamYData = np.vstack((GamShiftSolve, YFuture[:NumOutputs]))
@@ -474,11 +487,9 @@ def blockHankel(Hleft, Hbot=None, blockHeight=1):
     Nr = Hleft.shape[0] // blockHeight
     Nc = Nr if Hbot is None else Hbot.shape[1] // blockWidth
 
-    LeftBlock = np.zeros((Nr, blockHeight, blockWidth))
-    for i in range(Nr):
-        LeftBlock[i] = Hleft[i * blockHeight : (i + 1) * blockHeight, :]
-
-    MBlock = np.zeros((Nr, Nc, blockHeight, blockWidth))
+    # Extract blocks efficiently
+    LeftBlock = Hleft.reshape(Nr, blockHeight, blockWidth)
+    MBlock = np.zeros((Nr, Nc, blockHeight, blockWidth), dtype=Hleft.dtype)
 
     for k in range(min(Nc, Nr)):
         MBlock[: Nr - k, k] = LeftBlock[k:]
@@ -495,12 +506,9 @@ def blockHankel(Hleft, Hbot=None, blockHeight=1):
 
 
 def block2mat(Mblock):
+    # Efficiently reshape the block array to 2D matrix
     Nr, Nc, bh, bw = Mblock.shape
-    M = np.zeros((Nr * bh, Nc * bw))
-    for i in range(Nr):
-        for j in range(Nc):
-            M[i * bh : (i + 1) * bh, j * bw : (j + 1) * bw] = Mblock[i, j]
-    return M
+    return Mblock.transpose(0, 2, 1, 3).reshape(Nr * bh, Nc * bw)
 
 
 def postProcess(K, GammaDict, NumDict):
@@ -533,22 +541,20 @@ def postProcess(K, GammaDict, NumDict):
 
     # --- Innovation covariance
     rho = GamYData - K @ GamData
-    CovID = rho @ rho.T / NumCols
+    CovID = np.dot(rho, rho.T) / NumCols
 
     # --- Build L matrix
-    AC = np.vstack((AID, CID))  # shape: (n+p) x n
-    L = AC @ GammaPinv  # shape: (n+p) x (N * p)
+    AC = np.vstack((AID, CID))
+    L = AC @ GammaPinv
 
-    # --- Build Hankel subtraction matrices
+    # --- Build Hankel subtraction matrices (vectorized)
     M = np.zeros((NSig, NumRows * NumOutputs))
     M[:, NumOutputs:] = GammaLessPinv
 
     Mleft = blockTranspose(M, NSig, NumOutputs)
     LtopLeft = blockTranspose(L[:NSig], NSig, NumOutputs)
 
-    NTop = blockHankel(Mleft, blockHeight=NSig) - blockHankel(
-        LtopLeft, blockHeight=NSig
-    )
+    NTop = blockHankel(Mleft, blockHeight=NSig) - blockHankel(LtopLeft, blockHeight=NSig)
 
     LbotLeft = blockTranspose(L[NSig:], NumOutputs, NumOutputs)
     NBot = -blockHankel(LbotLeft, blockHeight=NumOutputs)
@@ -556,23 +562,13 @@ def postProcess(K, GammaDict, NumDict):
 
     N = np.vstack((NTop, NBot)) @ la.block_diag(np.eye(NumOutputs), GammaLess)
 
-    # --- Build input gain matrix from K
-    Kr = K[:, NSig:]  # shape: (n + p) x (N * m)
-    KsTop = np.zeros((NSig * NumRows, NumInputs))
-    KsBot = np.zeros((NumOutputs * NumRows, NumInputs))
-
-    for k in range(NumRows):
-        KsTop[k * NSig : (k + 1) * NSig] = Kr[
-            :NSig, k * NumInputs : (k + 1) * NumInputs
-        ]
-        KsBot[k * NumOutputs : (k + 1) * NumOutputs] = Kr[
-            NSig:, k * NumInputs : (k + 1) * NumInputs
-        ]
-
+    # --- Build input gain matrix from K (vectorized)
+    Kr = K[:, NSig:]
+    KsTop = Kr[:NSig].reshape(NSig, NumRows, NumInputs).transpose(1, 0, 2).reshape(NSig * NumRows, NumInputs)
+    KsBot = Kr[NSig:].reshape(NumOutputs, NumRows, NumInputs).transpose(1, 0, 2).reshape(NumOutputs * NumRows, NumInputs)
     Ks = np.vstack((KsTop, KsBot))
 
-    # --- Solve for B and D
-    DB = la.lstsq(N, Ks)[0]
+    DB, _, _, _ = la.lstsq(N, Ks, lapack_driver='gelsy')
     DID = DB[:NumOutputs]
     BID = DB[NumOutputs:]
 

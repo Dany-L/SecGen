@@ -13,58 +13,41 @@ classdef utils
             end
         end
 
-        %         function
-        %
-        %
-        %             def construct_lower_triangular_matrix(
-        %         self, L_flat: torch.Tensor, diag_length: int
-        %     ) -> torch.Tensor:
-        %         device = L_flat.device
-        %         flat_idx = 0
-        %         L = torch.zeros(
-        %             size=(diag_length, diag_length), dtype=torch.float32, device=device
-        %         )
-        %         for diag_idx, diag_size in zip(
-        %             range(0, -diag_length, -1), range(diag_length, 0, -1)
-        %         ):
-        %             L += torch.diag(L_flat[flat_idx : flat_idx + diag_size], diagonal=diag_idx)
-        %             flat_idx += diag_size
-        %
-        %         return L
-        %
-        %     def extract_vector_from_lower_triangular_matrix(
-        %         self, L: NDArray[np.float64]
-        %     ) -> NDArray[np.float64]:
-        %         diag_length = L.shape[0]
-        %         vector_list = []
-        %         for diag_idx in range(0, -diag_length, -1):
-        %             vector_list.append(np.diag(L, k=diag_idx))
-        %
-        %         return np.hstack(vector_list)
-        function [es, ds]= load_data_from_dir(directory, input_names, output_names, filter)
-            if nargin < 3
-                filter = false;
+        function [es, ds] = load_data_from_dir(directory, input_names, output_names, include_filter, exclude_filter)
+            if nargin < 4 || isempty(include_filter)
+                include_filter = '';
             end
+            if nargin < 5 || isempty(exclude_filter)
+                exclude_filter = '';
+            end
+
             filenames = dir(directory);
-            es = {}; ds = {};
-            for i=1:length(filenames)
+            es = {};
+            ds = {};
+
+            for i = 1:length(filenames)
                 filename = filenames(i).name;
                 [~,~,ext] = fileparts(filename);
-                if ~strcmp(ext,'.csv')
+
+                % Only process CSV files
+                if ~strcmp(ext, '.csv')
                     continue
                 end
 
-                if filter
-                    if ~contains(filename, filter)
-                        continue
-                    end
+                % Apply inclusion filter (if specified)
+                if ~isempty(include_filter) && ~contains(filename, include_filter)
+                    continue
                 end
-                tab = readtable(fullfile(directory,filename));
+
+                % Apply exclusion filter (if specified)
+                if ~isempty(exclude_filter) && contains(filename, exclude_filter)
+                    continue
+                end
+
+                tab = readtable(fullfile(directory, filename));
 
                 ds{end+1} = utils.get_sequence_from_tab(tab, input_names); %#ok<AGROW>
                 es{end+1} = utils.get_sequence_from_tab(tab, output_names); %#ok<AGROW>
-
-
             end
         end
 
@@ -96,7 +79,7 @@ classdef utils
             m = mean(stacked_data); s = std(stacked_data);
         end
 
-                function data = read_data_from_tab(tab,column_names)
+        function data = read_data_from_tab(tab,column_names)
             data = [];
             for idx =1:length(column_names)
                 column_name = column_names{idx};
@@ -180,7 +163,7 @@ classdef utils
             for k = 1:N
                 d_k = d(:,k);
                 x_k = x(k,:)';
-        
+
                 z_k = model.C2*x_k+ model.D21 * d_k;
                 w_k = tanh(z_k);
                 x(k+1,:) = model.A*x_k + model.B*d_k + model.B2 * w_k;
