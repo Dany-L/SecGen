@@ -33,7 +33,7 @@ nx = 8;
 n_train_data = iddata(cat(1,es_norm_train{:}),cat(1,ds_norm_train{:}),ts);
 n4sidOptions('Focus', 'simulation', 'InitialState','zero');
 tic;
-disturbance_model = 'estimate';
+disturbance_model = 'none';
 sys = n4sid(n_train_data, nx, 'DisturbanceModel',disturbance_model);
 elapsed_time = toc;  % Time in seconds
 A = sys.A;B=sys.B; C =sys.C; D=sys.D; K = sys.K;

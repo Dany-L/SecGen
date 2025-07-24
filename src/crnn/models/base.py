@@ -15,6 +15,7 @@ from pydantic import BaseModel
 import cvxpy as cp
 import scipy.linalg as la
 import scipy.signal as sig
+import pandas as pd
 
 from ..configuration.base import InitializationData
 
@@ -573,3 +574,81 @@ def postProcess(K, GammaDict, NumDict):
     BID = DB[NumOutputs:]
 
     return AID, BID, CID, DID, CovID
+
+
+def N4SID_NG_with_nfoursid(
+    u: np.ndarray,
+    y: np.ndarray,
+    nx: int,
+    NumRows: int = None,
+    NumCols: int = None,
+    enforce_stability_method: str = "projection"
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Estimate discrete-time state-space model using the NFourSID package.
+
+    Inputs:
+        u, y           - Input/output data arrays (shape: [n_channels, time_steps])
+        nx             - Desired model order (number of states)
+        NumRows        - Number of block rows (past horizon)
+        NumCols        - Number of block columns (future horizon)
+        require_stable - If True, enforce discrete-time A-matrix stability
+        enforce_stability_method - Stability enforcement method (not used here)
+
+    Returns:
+        A, B, C, D - State-space matrices
+        Cov       - Covariance matrix of residuals
+        Sigma     - Singular values from the SVD (for model order selection)
+    """
+    
+
+    # Check that there's enough data
+    NumVals = u.shape[1]
+
+    if NumRows is None and NumCols is None:
+        NumRows = 15 * nx
+        NumCols = NumVals - 2 * NumRows + 1
+
+    assert (
+        NumVals >= 2 * NumRows + NumCols - 1
+    ), "Insufficient data length for the given NumRows and NumCols."
+
+    # Convert input/output data to a dataframe
+    input_names = [f"u_{i}" for i in range(u.shape[0])]
+    output_names = [f"y_{i}" for i in range(y.shape[0])]
+    data = np.hstack([u.T, y.T])
+    columns = input_names + output_names
+    state_space_df = pd.DataFrame(data, columns=columns)
+
+    # Initialize the NFourSID object
+    nfoursid = NFourSID(
+        state_space_df,
+        output_columns=output_names,
+        input_columns=input_names,
+        num_block_rows=NumRows
+    )
+
+    # Perform subspace identification
+    nfoursid.subspace_identification()
+
+    # Perform system identification with the specified model order
+    state_space_identified, covariance_matrix = nfoursid.system_identification(
+        rank=nx
+    )
+
+    if enforce_stability_method == "projection":
+        # Fast stability enforcement: scale A to unit disc
+        A = state_space_identified.a
+        eigvals = np.linalg.eigvals(A)
+        max_eig = np.max(np.abs(eigvals))
+        if max_eig > 1.0:
+            A = A / (max_eig + 1e-6)
+    else:
+        raise ValueError(f"Unknown stability enforcement method: {enforce_stability_method}")
+
+    # Extract state-space matrices
+    B = state_space_identified.b
+    C = state_space_identified.c
+    D = state_space_identified.d
+
+    return A, B, C, D, covariance_matrix, None
