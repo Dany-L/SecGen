@@ -11,7 +11,7 @@ from ..models import base
 from ..utils import base as utils
 from ..utils import transformation as trans
 
-SETTLING_TIME_THRESHOLD = 0.1
+SETTLING_TIME_THRESHOLD = 0.02
 
 
 @dataclasses.dataclass
@@ -283,7 +283,7 @@ class AnalysisLti:
         return True
 
 
-def get_transient_time(ss: base.Linear) -> np.float64:
+def get_transient_time(ss: base.Linear, n_max = 5000) -> np.float64:
 
     def get_transient_from_step_response(n, plot=False):
         t, y = sig.dstep(
@@ -300,24 +300,28 @@ def get_transient_time(ss: base.Linear) -> np.float64:
         e_max = np.max(e, axis=1).reshape(-1, 1)
         transient_time = np.argmax(e < e_max * SETTLING_TIME_THRESHOLD, axis=1)
         if plot:
-            fig, ax = plt.subplots(figsize=(10, 4))
-            ax.plot(t, y[0])
-            for e_i in e_max:
-                ax.plot(t, np.ones_like(t) * e_i - e_i * SETTLING_TIME_THRESHOLD)
-            for i, e_i in enumerate(transient_time):
-                ax.scatter(e_i * ss.dt, y[0][e_i, i])
-            plt.savefig(f"step_{n}.png")
+            for idx, _ in enumerate(e_max):
+                fig, ax = plt.subplots(figsize=(10, 4))
+                ax.plot(t, y[0][:, idx], label=f"Output {idx + 1}")
+                ax.plot(t, e[idx, :], label='|y - y_ss|')
+                ax.plot(t, e_max[idx]*SETTLING_TIME_THRESHOLD*np.ones_like(t), label='e_max * 0.02', linestyle='--')
+                ax.scatter(transient_time[idx] * ss.dt, e[idx, transient_time[idx]], color='red', label=f'Transient Time {transient_time[idx]}')
+                ax.set_xlabel("Time")
+                ax.set_ylabel("Output")
+                ax.legend()
+                ax.grid()
+                plt.savefig(f"step_{n}.png")
 
         return np.argmax(e < e_max * SETTLING_TIME_THRESHOLD, axis=1), e, e_max
 
     steady_state = get_steady_state(ss)
     n = 100
-    transient_time, e, e_max = get_transient_from_step_response(n)
-    while np.all(e > e_max * SETTLING_TIME_THRESHOLD) or n > 1000:
+    transient_time, e, e_max = get_transient_from_step_response(n, plot=False)
+    while np.all(e > e_max * SETTLING_TIME_THRESHOLD) or n > n_max:
         n += 100
         transient_time, e, e_max = get_transient_from_step_response(n, plot=False)
 
-    if n > 1000:
+    if n > n_max:
         raise ValueError("No reasonable transient time could be calculated.")
 
     return transient_time * ss.dt
@@ -328,7 +332,7 @@ def get_steady_state(
 ) -> NDArray[np.float64]:
     nd = ss.B.shape[1]
     if u is None:
-        u = np.ones((nd, 1))
+        u = np.ones((nd, 1)) # step response
     nx = ss.A.shape[0]
     return (
         -ss.C.cpu().detach().numpy()

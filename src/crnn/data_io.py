@@ -336,7 +336,8 @@ def load_initialization(directory: str) -> InitializationData:
                     torch.tensor(initialization["ss"]["C"]),
                     torch.tensor(initialization["ss"]["D"]),
                     dt=initialization["ss"]["dt"],
-                )
+                ),
+                "transient_time": initialization["transient_time"],
             },
         )
     else:

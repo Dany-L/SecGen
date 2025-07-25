@@ -16,6 +16,7 @@ import cvxpy as cp
 import scipy.linalg as la
 import scipy.signal as sig
 import pandas as pd
+import matplotlib.pyplot as plt
 
 from ..configuration.base import InitializationData
 
@@ -247,9 +248,12 @@ def run_n4sid(
     dt: np.float64,
     nx=None,
     num_block_rows=1,
-) -> Linear:
+    N_max = None
+) -> Tuple[Linear, NDArray[np.float64], NDArray[np.float64]]:
 
     N, nd = ds[0].shape
+    if N_max is not None:
+        N = min(N, N_max)
     M = len(ds)
     _, ne = es[0].shape
 
@@ -262,11 +266,30 @@ def run_n4sid(
     if nx is None:
         nx = int(np.max([len(input_names), len(output_names)]))
 
-    A, B, C, D, Cov, S = N4SID_NG_with_nfoursid(d.T, e.T, nx, enforce_stability_method='projection')
+    A, B, C, D, Cov, S = N4SID_NG_with_nfoursid(d.T[:, :N], e.T[:,:N], nx, enforce_stability_method='projection')
 
-    return Linear(
+    # Evaluate the linear approximation
+    e_hat = simulate_linear_system(A, B, C, D, d.T)
+
+    # for i in range(ne):
+    #     fig, ax = plt.subplots(figsize=(10,4))
+    #     t = np.linspace(0,(N-1)*dt, N)
+    #     ax.plot(t, e.T[i, :N], label="e")
+    #     ax.plot(t, e_hat[i, :N], label="e_hat")
+    #     ax.set_xlabel("Time")
+    #     ax.set_ylabel("Output")
+    #     ax.legend() 
+    #     ax.grid()
+
+    # Compute fit percentage
+    fit_percent = compute_fit_percent(e.T, e_hat)
+
+    # Compute RMSE
+    rmse = np.sqrt(np.mean((e.T - e_hat) ** 2, axis=1))
+
+    return (Linear(
         torch.tensor(A), torch.tensor(B), torch.tensor(C), torch.tensor(D), dt
-    )
+    ), fit_percent, rmse)
 
 
 def N4SID(
@@ -626,3 +649,49 @@ def N4SID_NG_with_nfoursid(
     D = state_space_identified.d
 
     return A, B, C, D, covariance_matrix, None
+
+
+def simulate_linear_system(
+    A: np.ndarray,
+    B: np.ndarray,
+    C: np.ndarray,
+    D: np.ndarray,
+    u: np.ndarray,
+    x0: np.ndarray = None
+) -> np.ndarray:
+    """
+    Simulate output of a discrete-time linear system:
+    x_{t+1} = A x_t + B u_t
+    y_t = C x_t + D u_t
+    u: shape [n_inputs, T]
+    Returns y: shape [n_outputs, T]
+    """
+    nx = A.shape[0]
+    n_outputs = C.shape[0]
+    T = u.shape[1]
+    x = np.zeros((nx, T))
+    y = np.zeros((n_outputs, T))
+    if x0 is None:
+        x_prev = np.zeros((nx, 1))
+    else:
+        x_prev = x0.reshape(nx, 1)
+    for t in range(T):
+        u_t = u[:, t:t+1]
+        x[:, t:t+1] = A @ x_prev + B @ u_t
+        y[:, t:t+1] = C @ x[:, t:t+1] + D @ u_t
+        x_prev = x[:, t:t+1]
+    return y
+
+
+def compute_fit_percent(y_true: np.ndarray, y_pred: np.ndarray) -> float:
+    """
+    Compute the fit percentage between true and predicted values.
+
+    y_true : True output data
+    y_pred : Predicted output data
+
+    Returns:
+        fit_percent : Fit percentage
+    """
+    fit_percent = 100 * (1 - np.sum((y_true - y_pred) ** 2) / np.sum(y_true ** 2))
+    return fit_percent

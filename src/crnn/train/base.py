@@ -117,23 +117,23 @@ def train(
     init_data = load_initialization(result_directory)
 
     if not init_data.data:
-        # ss = base.run_n4sid(
-        #     np.expand_dims(train_inputs[0], axis=0),
-        #     np.expand_dims(train_outputs[0], axis=0),
-        #     dt=experiment_config.dt,
-        # )
-        ss = base.run_n4sid(
-            train_outputs,
+        ss, mse, fit = base.run_n4sid(
+            train_inputs,
             train_outputs,
             dt=experiment_config.dt,
+            nx=experiment_config.nx
         )
-        tracker.track(ev.SaveInitialization("", ss, {}))
+        tracker.track(ev.Log("", f'Evaluation of linear approximation on training data: Fit= {fit}, MSE= {mse}'))
+        transient_time = int(np.max(get_transient_time(ss)/experiment_config.dt))
+        tracker.track(ev.TrackParameter("", "transient_time", transient_time))
+        tracker.track(ev.SaveInitialization("", ss, {'transient_time':transient_time}))
+
     else:
         ss = init_data.data["ss"]
-    # transient_time = np.max(get_transient_time(ss)/experiment_config.dt)
-    # horizon = int((2*transient_time)*1.05)
-    # window = int(0.1*horizon)
-    window = experiment_config.window
+        transient_time = init_data.data["transient_time"]
+    
+    horizon = transient_time
+    window = int(0.1*horizon)
 
     # tracker.track(ev.Log("", f"window: {window}, horizon: {horizon}"))
 

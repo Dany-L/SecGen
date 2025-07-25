@@ -7,43 +7,12 @@ import matplotlib.pyplot as plt
 import json
 from utils import load_filtered_csvs
 
-from crnn.models.base import N4SID, N4SID_NG_with_nfoursid
+from crnn.models.base import N4SID, N4SID_NG_with_nfoursid, simulate_linear_system
 
 def compute_fit_percent(y_true: np.ndarray, y_pred: np.ndarray) -> np.ndarray:
     # Returns fit percentage for each output channel
     fit = 100 * (1 - np.linalg.norm(y_true - y_pred, axis=1) / np.linalg.norm(y_true - y_true.mean(axis=1, keepdims=True), axis=1))
     return fit
-
-def simulate_linear_system(
-    A: np.ndarray,
-    B: np.ndarray,
-    C: np.ndarray,
-    D: np.ndarray,
-    u: np.ndarray,
-    x0: np.ndarray = None
-) -> np.ndarray:
-    """
-    Simulate output of a discrete-time linear system:
-    x_{t+1} = A x_t + B u_t
-    y_t = C x_t + D u_t
-    u: shape [n_inputs, T]
-    Returns y: shape [n_outputs, T]
-    """
-    nx = A.shape[0]
-    n_outputs = C.shape[0]
-    T = u.shape[1]
-    x = np.zeros((nx, T))
-    y = np.zeros((n_outputs, T))
-    if x0 is None:
-        x_prev = np.zeros((nx, 1))
-    else:
-        x_prev = x0.reshape(nx, 1)
-    for t in range(T):
-        u_t = u[:, t:t+1]
-        x[:, t:t+1] = A @ x_prev + B @ u_t
-        y[:, t:t+1] = C @ x[:, t:t+1] + D @ u_t
-        x_prev = x[:, t:t+1]
-    return y
 
 def compare_eigenvalues(A_py: np.ndarray, A_mat: np.ndarray):
     eig_py = np.linalg.eigvals(A_py)
