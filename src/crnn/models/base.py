@@ -253,42 +253,16 @@ def run_n4sid(
     M = len(ds)
     _, ne = es[0].shape
 
-    f = MAX_SAMPLES_N4SID / (N * M)
-    if f < 1:
-        M_sub = np.max([int(f * M), 1])
-        idx = np.random.choice(range(M), M_sub)
-    else:
-        idx = range(M)
-
     input_names = [f"u_{i}" for i in range(nd)]
     output_names = [f"y_{i}" for i in range(ne)]
 
-    if N > MAX_SAMPLES_N4SID:
-        N = MAX_SAMPLES_N4SID
-
-    ds_sub, es_sub = [], []
-    for i in idx:
-        ds_sub.append(ds[i][:N])
-        es_sub.append(es[i][:N])
-
-    d = np.vstack(ds_sub)
-    e = np.vstack(es_sub)
+    d = np.vstack(ds)
+    e = np.vstack(es)
 
     if nx is None:
         nx = int(np.max([len(input_names), len(output_names)]))
 
-    # io_data = pd.DataFrame(np.hstack([d, e]), columns=input_names + output_names)
-    # n4sid = NFourSID(
-    #     io_data,
-    #     input_columns=input_names,
-    #     output_columns=output_names,
-    #     num_block_rows=num_block_rows
-    # )
-
-    A, B, C, D, Cov, S = N4SID(d.T, e.T, nx, require_stable=True)
-
-    # n4sid.subspace_identification()
-    # ss, _ = n4sid.system_identification(rank=nx)
+    A, B, C, D, Cov, S = N4SID_NG_with_nfoursid(d.T, e.T, nx, enforce_stability_method='projection')
 
     return Linear(
         torch.tensor(A), torch.tensor(B), torch.tensor(C), torch.tensor(D), dt
@@ -328,7 +302,7 @@ def N4SID(
     NumVals = u.shape[1]
 
     if NumRows is None and NumCols is None:
-        NumRows = 2 * nx
+        NumRows = 15 * nx
         NumCols = NumVals - 2 * NumRows + 1
 
     assert (

@@ -59,6 +59,11 @@ elapsed_time_str = char(elapsed_duration);  % Convert to string for display
 fprintf('n4sid identification completed in %s (HH:MM:SS)\n', elapsed_time_str);
 % Save to MAT file
 save(sprintf('./data/%s_%s_n4sid.mat',system_name, disturbance_model), 'sys_struct');
+
+% obtain settling time is that equal to transient time?
+step(sys)
+
+
 %% system analysis and evaluation on validation set
 % [mag, phase, w] = bode(sys);
 % 

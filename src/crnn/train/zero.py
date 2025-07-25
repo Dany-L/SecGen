@@ -6,6 +6,7 @@ from jax import grad
 from torch import nn
 from torch.optim import Optimizer, lr_scheduler
 from torch.utils.data import DataLoader
+from tqdm import tqdm
 
 from ..configuration.base import InputOutput
 from ..configuration.experiment import BaseExperimentConfig
@@ -116,204 +117,199 @@ class ZeroInitPredictor(InitPred):
                 torch.zeros((predictor.get_number_of_parameters(), 1)),
             )  # phi is barrier
 
-            for step, batch in enumerate(train_loader):
-                # predictor.zero_grad()
-                if exp_config.ensure_constrained_method == "armijo":
-                    if isinstance(predictor, base_jax.ConstrainedModule):
-                        d, e, x0 = (
-                            batch["d"].cpu().detach().numpy(),
-                            batch["e"].cpu().detach().numpy(),
-                            None,
-                        )
-                        theta = predictor.theta
+            with tqdm(enumerate(train_loader), total=len(train_loader), desc=f"Epoch {epoch+1}/{exp_config.epochs}") as pbar:
+                for step, batch in pbar:
+                    # predictor.zero_grad()
+                    if exp_config.ensure_constrained_method == "armijo":
+                        if isinstance(predictor, base_jax.ConstrainedModule):
+                            d, e, x0 = (
+                                batch["d"].cpu().detach().numpy(),
+                                batch["e"].cpu().detach().numpy(),
+                                None,
+                            )
+                            theta = predictor.theta
 
-                        def f(theta):
+                            def f(theta):
+                                e_hat, _ = predictor.forward(d, x0, theta)
+                                loss = jnp.mean((e_hat - e) ** 2)
+                                phi = predictor.get_phi(t, theta)
+                                return loss + phi
+
+                            dF = grad(f)
+                            armijo = Armijo(f, dF)
+                            s = armijo.linesearch(theta, -dF(theta))
+                            if step == 0 and epoch % PLOT_AFTER_EPOCHS == 0:
+                                fig = armijo.plot_step_size_function(theta)
+                                tracker.track(
+                                    ev.SaveFig("", fig, f"step_size_plot-{epoch}")
+                                )
+
+                            theta = base_jax.update(theta, dF, s)
+                            predictor.theta = theta
+
+                            batch_loss = torch.from_dlpack(f(theta))
+                            batch_phi = torch.tensor([0.0])
+
                             e_hat, _ = predictor.forward(d, x0, theta)
-                            loss = jnp.mean((e_hat - e) ** 2)
-                            phi = predictor.get_phi(t, theta)
-                            return loss + phi
 
-                        dF = grad(f)
-                        armijo = Armijo(f, dF)
-                        s = armijo.linesearch(theta, -dF(theta))
-                        # print(f'step size: {s}')
-                        # print(f'gradient size: {jnp.linalg.norm(dF(theta))}')
-                        if step == 0 and epoch % PLOT_AFTER_EPOCHS == 0:
-                            fig = armijo.plot_step_size_function(theta)
-                            tracker.track(
-                                ev.SaveFig("", fig, f"step_size_plot-{epoch}")
+                            if step % 100 == 0:
+                                fig = plot.plot_sequence(
+                                    [
+                                        e_hat[0, :],
+                                        e[0, :],
+                                    ],
+                                    0.01,
+                                    title="normalized output",
+                                    legend=[r"$\hat e$", r"$e$"],
+                                )
+                                tracker.track(ev.SaveFig("", fig, f"e_{epoch}-step_{step}"))
+
+                        elif isinstance(predictor, base_torch.ConstrainedModule):
+                            opt_fcn = base_torch.OptFcn(
+                                batch["d"], batch["e"], predictor, t, loss=loss_function
                             )
 
-                        theta = base_jax.update(theta, dF, s)
-                        predictor.theta = theta
-                        # print(f'constraints satisfied? {predictor.check_constraints(theta)}')
+                            def f(theta: torch.Tensor) -> torch.Tensor:
+                                return opt_fcn.f(theta)
 
-                        batch_loss = torch.from_dlpack(f(theta))
-                        batch_phi = torch.tensor([0.0])
+                            def dF(theta: torch.Tensor) -> torch.Tensor:
+                                return opt_fcn.dF(theta).reshape((-1, 1))
 
-                        e_hat, _ = predictor.forward(d, x0, theta)
-
-                        if step % 100 == 0:
-                            fig = plot.plot_sequence(
+                            theta = torch.hstack(
                                 [
-                                    e_hat[0, :],
-                                    e[0, :],
-                                ],
-                                0.01,
-                                title="normalized output",
-                                legend=[r"$\hat e$", r"$e$"],
-                            )
-                            tracker.track(ev.SaveFig("", fig, f"e_{epoch}-step_{step}"))
+                                    p.flatten().clone()
+                                    for p in predictor.parameters()
+                                    if p is not None
+                                ]
+                            ).reshape(-1, 1)
 
-                    elif isinstance(predictor, base_torch.ConstrainedModule):
-                        opt_fcn = base_torch.OptFcn(
-                            batch["d"], batch["e"], predictor, t, loss=loss_function
-                        )
+                            batch_loss, batch_phi = f(theta), torch.tensor(0.0)
 
-                        def f(theta: torch.Tensor) -> torch.Tensor:
-                            return opt_fcn.f(theta)
+                            arm = Armijo(f, dF, 1)
+                            dir = -dF(theta)
+                            s = arm.linesearch(theta, dir)
 
-                        def dF(theta: torch.Tensor) -> torch.Tensor:
-                            return opt_fcn.dF(theta).reshape((-1, 1))
-
-                        theta = torch.hstack(
-                            [
-                                p.flatten().clone()
-                                for p in predictor.parameters()
-                                if p is not None
-                            ]
-                        ).reshape(-1, 1)
-
-                        # old_theta = theta.detach().clone()
-                        batch_loss, batch_phi = f(theta), torch.tensor(0.0)
-
-                        arm = Armijo(f, dF, 1)
-                        # if step == 0 and epoch % PLOT_AFTER_EPOCHS == 0:
-                        #     fig = arm.plot_step_size_function(theta)
-                        #     tracker.track(ev.SaveFig('', fig, f'step_size_plot-{epoch}'))
-                        dir = -dF(theta)
-                        # print(dir)
-                        s = arm.linesearch(theta, dir)
-                        # new_theta = old_theta + s * dir
-                        # opt_fcn.set_vec_pars_to_model(new_theta)
-
-                        tracker.track(
-                            ev.TrackMetrics(
-                                "",
-                                {
-                                    "loss.step": float(batch_loss),
-                                    "stepsize.step": float(s),
-                                },
-                                epoch * len(train_loader) + step,
-                            )
-                        )
-
-                    else:
-                        e_hat, _ = predictor.forward(batch["d"])
-                        batch_loss = loss_function(e_hat, batch["e"])
-                        batch_phi = torch.tensor([0.0])
-                        (batch_loss + batch_phi).backward()
-                        opt_pred.step()
-
-                elif exp_config.ensure_constrained_method == "project":
-                    predictor.zero_grad()
-                    e_hat, _ = predictor.forward(batch["d"])
-                    batch_loss = loss_function(e_hat, batch["e"])
-                    batch_phi = predictor.get_phi(t)
-                    (batch_loss + batch_phi).backward()
-                    opt_pred.step()
-
-                    if not predictor.check_constraints():
-                        problem_status = predictor.project_parameters()
-                        # tracker.track(ev.Log("", f"{step}: Projecting parameters: {problem_status}"))
-                        predictor.set_lure_system()
-                        projection_counter += 1
-
-                elif exp_config.ensure_constrained_method == "backtracking":
-                    predictor.zero_grad()
-                    e_hat, _ = predictor.forward(batch["d"])
-                    batch_loss = loss_function(e_hat, batch["e"])
-                    # batch_phi = torch.nn.functional.relu(predictor.get_phi(t))
-                    batch_phi = predictor.get_phi(t)
-                    (batch_loss + batch_phi).backward()
-                    theta_old = trans.get_flat_parameters(predictor.parameters())
-
-                    grads = torch.hstack(
-                        [
-                            p.grad.flatten().clone()
-                            for p in predictor.parameters()
-                            if p.grad is not None
-                        ]
-                    ).reshape(-1, 1)
-                    # tracker.track(ev.Log("", f"||grad||: {torch.linalg.norm(grads):.2f} \t phi: {batch_phi.item():.2f}"))
-                    opt_pred.step()
-
-                    theta = trans.get_flat_parameters(predictor.parameters())
-                    num_backtracking_steps = 0
-                    while not predictor.check_constraints():
-                        theta = alpha * theta + (1 - alpha) * theta_old.clone()
-                        trans.set_vec_pars_to_model(predictor.parameters(), theta)
-                        num_backtracking_steps += 1
-                        if num_backtracking_steps > 100:
                             tracker.track(
-                                ev.Log("", "Backtracking failed after 100 steps")
-                            )
-                            trans.set_vec_pars_to_model(
-                                predictor.parameters(), theta_old
-                            )
-                            return (None, predictor)
-                    # tracker.track(ev.Log("", f"Backtracking steps: {num_backtracking_steps}"))
-
-                elif exp_config.ensure_constrained_method == "dual":
-
-                    predictor.zero_grad()
-                    e_hat, _ = predictor.forward(batch["d"])
-                    batch_loss = loss_function(e_hat, batch["e"])
-                    batch_phi = torch.tensor(0.0)
-                    for idx, (lam_i, F_i) in enumerate(
-                        zip(
-                            dual_vars,
-                            predictor.sdp_constraints()
-                            + predictor.pointwise_constraints(),
-                        )
-                    ):
-                        if len(F_i().shape) > 0:
-                            min_eigenvals[idx] = -(
-                                torch.min(torch.real(torch.linalg.eig(F_i())[0])) - 1e-3
+                                ev.TrackMetrics(
+                                    "",
+                                    {
+                                        "loss.step": float(batch_loss),
+                                        "stepsize.step": float(s),
+                                    },
+                                    epoch * len(train_loader) + step,
+                                )
                             )
 
                         else:
-                            min_eigenvals[idx] = -F_i()
-                        batch_phi += lam_i * min_eigenvals[idx]
+                            e_hat, _ = predictor.forward(batch["d"])
+                            batch_loss = loss_function(e_hat, batch["e"])
+                            batch_phi = torch.tensor([0.0])
+                            (batch_loss + batch_phi).backward()
+                            opt_pred.step()
 
-                    (batch_loss + batch_phi).backward()
+                    elif exp_config.ensure_constrained_method == "project":
+                        predictor.zero_grad()
+                        e_hat, _ = predictor.forward(batch["d"])
+                        batch_loss = loss_function(e_hat, batch["e"])
+                        batch_phi = predictor.get_phi(t)
+                        (batch_loss + batch_phi).backward()
+                        opt_pred.step()
 
-                    opt_pred.step()
+                        if not predictor.check_constraints():
+                            problem_status = predictor.project_parameters()
+                            predictor.set_lure_system()
+                            projection_counter += 1
 
-                    with torch.no_grad():
-                        for idx, (lam_i, min_eigenval) in enumerate(
-                            zip(dual_vars, min_eigenvals)
-                        ):
-                            dual_vars[idx] = torch.max(
-                                torch.tensor([lam_i - 0.01 * (-min_eigenval), 0])
+                    elif exp_config.ensure_constrained_method == "backtracking":
+                        predictor.zero_grad()
+                        e_hat, _ = predictor.forward(batch["d"])
+                        batch_loss = loss_function(e_hat, batch["e"])
+                        batch_phi = predictor.get_phi(t)
+                        (batch_loss + batch_phi).backward()
+                        theta_old = trans.get_flat_parameters(predictor.parameters())
+
+                        grads = torch.hstack(
+                            [
+                                p.grad.flatten().clone()
+                                for p in predictor.parameters()
+                                if p.grad is not None
+                            ]
+                        ).reshape(-1, 1)
+                        opt_pred.step()
+
+                        theta = trans.get_flat_parameters(predictor.parameters())
+                        num_backtracking_steps = 0
+                        while not predictor.check_constraints():
+                            theta = alpha * theta + (1 - alpha) * theta_old.clone()
+                            trans.set_vec_pars_to_model(predictor.parameters(), theta)
+                            num_backtracking_steps += 1
+                            if num_backtracking_steps > 100:
+                                tracker.track(
+                                    ev.Log("", "Backtracking failed after 100 steps")
+                                )
+                                trans.set_vec_pars_to_model(
+                                    predictor.parameters(), theta_old
+                                )
+                                return (None, predictor)
+
+                    elif exp_config.ensure_constrained_method == "dual":
+
+                        predictor.zero_grad()
+                        e_hat, _ = predictor.forward(batch["d"])
+                        batch_loss = loss_function(e_hat, batch["e"])
+                        batch_phi = torch.tensor(0.0)
+                        for idx, (lam_i, F_i) in enumerate(
+                            zip(
+                                dual_vars,
+                                predictor.sdp_constraints()
+                                + predictor.pointwise_constraints(),
                             )
+                        ):
+                            if len(F_i().shape) > 0:
+                                min_eigenvals[idx] = -(
+                                    torch.min(torch.real(torch.linalg.eig(F_i())[0])) - 1e-3
+                                )
 
-                    grads = torch.hstack(
-                        [
-                            p.grad.flatten().clone()
-                            for p in predictor.parameters()
-                            if p.grad is not None
-                        ]
-                    ).reshape(-1, 1)
+                            else:
+                                min_eigenvals[idx] = -F_i()
+                            batch_phi += lam_i * min_eigenvals[idx]
 
-                else:
-                    raise ValueError(
-                        f"Unknown method to ensure constraints: {exp_config.ensure_constrained_method}"
-                    )
+                        (batch_loss + batch_phi).backward()
 
-                predictor.set_lure_system()
-                loss += batch_loss.item()
-                phi += batch_phi.item()
+                        opt_pred.step()
+
+                        with torch.no_grad():
+                            for idx, (lam_i, min_eigenval) in enumerate(
+                                zip(dual_vars, min_eigenvals)
+                            ):
+                                dual_vars[idx] = torch.max(
+                                    torch.tensor([lam_i - 0.01 * (-min_eigenval), 0])
+                                )
+
+                        grads = torch.hstack(
+                            [
+                                p.grad.flatten().clone()
+                                for p in predictor.parameters()
+                                if p.grad is not None
+                            ]
+                        ).reshape(-1, 1)
+
+                    else:
+                        raise ValueError(
+                            f"Unknown method to ensure constraints: {exp_config.ensure_constrained_method}"
+                        )
+
+                    predictor.set_lure_system()
+                    loss += batch_loss.item()
+                    phi += batch_phi.item()
+
+                    # Update progress bar
+                    pbar.set_postfix({
+                        "loss": loss / (step + 1),
+                        "phi": phi / (step + 1),
+                        "projections": projection_counter,
+                        "backtracking": num_backtracking_steps,
+                    })
 
             if (
                 not predictor.check_constraints()

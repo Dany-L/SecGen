@@ -114,17 +114,22 @@ def train(
     tracker.track(ev.Log("", f'Training samples: {np.sum([train_input.shape[0] for train_input in train_inputs])}'))
 
 
-    # init_data = load_initialization(result_directory)
+    init_data = load_initialization(result_directory)
 
-    # if not init_data.data:
-    #     ss = base.run_n4sid(
-    #         np.expand_dims(train_inputs[0], axis=0),
-    #         np.expand_dims(train_outputs[0], axis=0),
-    #         dt=experiment_config.dt,
-    #     )
-    #     tracker.track(ev.SaveInitialization("", ss, {}))
-    # else:
-    #     ss = init_data.data["ss"]
+    if not init_data.data:
+        # ss = base.run_n4sid(
+        #     np.expand_dims(train_inputs[0], axis=0),
+        #     np.expand_dims(train_outputs[0], axis=0),
+        #     dt=experiment_config.dt,
+        # )
+        ss = base.run_n4sid(
+            train_outputs,
+            train_outputs,
+            dt=experiment_config.dt,
+        )
+        tracker.track(ev.SaveInitialization("", ss, {}))
+    else:
+        ss = init_data.data["ss"]
     # transient_time = np.max(get_transient_time(ss)/experiment_config.dt)
     # horizon = int((2*transient_time)*1.05)
     # window = int(0.1*horizon)
