@@ -7,8 +7,8 @@ import torch
 from pydantic import BaseModel
 
 from .configuration.base import InputOutput
-from .models.torch import base as base_torch
-from .models.torch import recurrent as recurrent_torch
+from .models import base as base
+from .models import recurrent as recurrent
 from .tracker import events as ev
 from .tracker.base import AggregatedTracker
 from .utils.base import get_sequence_norm
@@ -35,7 +35,7 @@ class AdditionalTest:
     def __init__(
         self,
         config: AdditionalTestConfig,
-        model: base_torch.ConstrainedModule,
+        model: base.ConstrainedModule,
         tracker: AggregatedTracker = AggregatedTracker(),
     ):
         self.epochs = config.epochs
@@ -153,14 +153,14 @@ class InputOutputStabilityL2(AdditionalTest):
 
 
 def get_x0(
-    model: base_torch.ConstrainedModule, B: int
+    model: base.ConstrainedModule, B: int
 ) -> Union[Tuple[torch.Tensor], Tuple[torch.Tensor, torch.Tensor]]:
-    if isinstance(model, recurrent_torch.BasicLstm):
+    if isinstance(model, recurrent.BasicLstm):
         x0 = (
             torch.rand(model.num_layers, B, model.nx),
             torch.rand(model.num_layers, B, model.nx),
         )
-    elif isinstance(model, recurrent_torch.BasicRnn):
+    elif isinstance(model, recurrent.BasicRnn):
         x0 = (torch.rand(model.num_layers, B, model.nx),)
     else:
         x0 = (torch.rand(B, model.nx),)
@@ -168,12 +168,12 @@ def get_x0(
 
 
 def get_xk(
-    model: base_torch.ConstrainedModule,
+    model: base.ConstrainedModule,
     x: Union[Tuple[torch.Tensor, torch.Tensor], Tuple[torch.Tensor]],
 ) -> torch.Tensor:
-    if isinstance(model, recurrent_torch.BasicLstm):
+    if isinstance(model, recurrent.BasicLstm):
         xk = torch.hstack([h[-1, 0, :] for h in x]).reshape(2 * model.nx, 1)
-    elif isinstance(model, recurrent_torch.BasicRnn):
+    elif isinstance(model, recurrent.BasicRnn):
         xk = x[0][-1, 0, :].reshape(model.nx, 1)
     else:
         xk = x[0][0, :].reshape(model.nx, 1)

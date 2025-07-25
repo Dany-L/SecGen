@@ -1,8 +1,6 @@
 from typing import List, Optional, Tuple
 
-import jax.numpy as jnp
 import torch
-from jax import grad
 from torch import nn
 from torch.optim import Optimizer, lr_scheduler
 from torch.utils.data import DataLoader
@@ -11,8 +9,6 @@ from tqdm import tqdm
 from ..configuration.base import InputOutput
 from ..configuration.experiment import BaseExperimentConfig
 from ..models import base
-from ..models.jax import base as base_jax
-from ..models.torch import base as base_torch
 from ..tracker import events as ev
 from ..tracker.base import AggregatedTracker
 from ..utils import plot
@@ -121,51 +117,8 @@ class ZeroInitPredictor(InitPred):
                 for step, batch in pbar:
                     # predictor.zero_grad()
                     if exp_config.ensure_constrained_method == "armijo":
-                        if isinstance(predictor, base_jax.ConstrainedModule):
-                            d, e, x0 = (
-                                batch["d"].cpu().detach().numpy(),
-                                batch["e"].cpu().detach().numpy(),
-                                None,
-                            )
-                            theta = predictor.theta
-
-                            def f(theta):
-                                e_hat, _ = predictor.forward(d, x0, theta)
-                                loss = jnp.mean((e_hat - e) ** 2)
-                                phi = predictor.get_phi(t, theta)
-                                return loss + phi
-
-                            dF = grad(f)
-                            armijo = Armijo(f, dF)
-                            s = armijo.linesearch(theta, -dF(theta))
-                            if step == 0 and epoch % PLOT_AFTER_EPOCHS == 0:
-                                fig = armijo.plot_step_size_function(theta)
-                                tracker.track(
-                                    ev.SaveFig("", fig, f"step_size_plot-{epoch}")
-                                )
-
-                            theta = base_jax.update(theta, dF, s)
-                            predictor.theta = theta
-
-                            batch_loss = torch.from_dlpack(f(theta))
-                            batch_phi = torch.tensor([0.0])
-
-                            e_hat, _ = predictor.forward(d, x0, theta)
-
-                            if step % 100 == 0:
-                                fig = plot.plot_sequence(
-                                    [
-                                        e_hat[0, :],
-                                        e[0, :],
-                                    ],
-                                    0.01,
-                                    title="normalized output",
-                                    legend=[r"$\hat e$", r"$e$"],
-                                )
-                                tracker.track(ev.SaveFig("", fig, f"e_{epoch}-step_{step}"))
-
-                        elif isinstance(predictor, base_torch.ConstrainedModule):
-                            opt_fcn = base_torch.OptFcn(
+                        if isinstance(predictor, base.ConstrainedModule):
+                            opt_fcn = base.OptFcn(
                                 batch["d"], batch["e"], predictor, t, loss=loss_function
                             )
 

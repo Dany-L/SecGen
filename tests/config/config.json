@@ -77,22 +77,6 @@
     },
     "models": [
         {
-            "m_short_name" : "ltiRnnJax",
-            "m_class": "crnn.models.jax.recurrent.BasicLtiRnn",
-            "parameters": {
-                "nonlinearity": "tanh",
-                "multiplier": "diag"
-            }
-        },
-        {
-            "m_short_name" : "tanhJax",
-            "m_class": "crnn.models.jax.constrained.ConstrainedLtiRnn",
-            "parameters": {
-                "nonlinearity": "tanh",
-                "multiplier": "diag"
-            }
-        },
-        {
             "m_short_name": "ltiRnn",
             "m_class": "crnn.models.torch.recurrent.BasicLtiRnn",
             "parameters": {

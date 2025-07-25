@@ -5,16 +5,15 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from ...utils import base as utils
-from ...utils import transformation as trans
-from .. import base
-from . import base as base_torch
+from ..utils import base as utils
+from ..utils import transformation as trans
+from . import base
 
 
-class ConstrainedLtiRnn(base_torch.L2StableConstrainedModule):
-    CONFIG = base_torch.ConstrainedModuleConfig
+class ConstrainedLtiRnn(base.L2StableConstrainedModule):
+    CONFIG = base.ConstrainedModuleConfig
 
-    def __init__(self, config: base_torch.ConstrainedModuleConfig) -> None:
+    def __init__(self, config: base.ConstrainedModuleConfig) -> None:
         super().__init__(config)
 
     def pointwise_constraints(self) -> List[Callable]:
@@ -123,10 +122,10 @@ class ConstrainedLtiRnn(base_torch.L2StableConstrainedModule):
         return f"Projected parameters with cvxpy solution, ga2: {utils.get_opt_values(ga2)}, problem status: {problem.status}"
 
 
-class ConstrainedLtiRnnGeneralSectorConditions(base_torch.L2StableConstrainedModule):
-    CONFIG = base_torch.ConstrainedModuleConfig
+class ConstrainedLtiRnnGeneralSectorConditions(base.L2StableConstrainedModule):
+    CONFIG = base.ConstrainedModuleConfig
 
-    def __init__(self, config: base_torch.ConstrainedModuleConfig) -> None:
+    def __init__(self, config: base.ConstrainedModuleConfig) -> None:
         super().__init__(config)
         # assumes sector bounds alpha = 0 and beta = 1
         # this leads to P = [[-(Lambda + Lambda.T), Lambda], [Lambda.T, 0]]
@@ -273,11 +272,11 @@ class ConstrainedLtiRnnGeneralSectorConditions(base_torch.L2StableConstrainedMod
 
 
 class ConstrainedLtiRnnGeneralSectorConditionsTransformed(
-    base_torch.L2StableConstrainedModule
+    base.L2StableConstrainedModule
 ):
-    CONFIG = base_torch.ConstrainedModuleConfig
+    CONFIG = base.ConstrainedModuleConfig
 
-    def __init__(self, config: base_torch.ConstrainedModuleConfig) -> None:
+    def __init__(self, config: base.ConstrainedModuleConfig) -> None:
         super().__init__(config)
         # assumes sector bounds alpha = -1 and beta = 0
         # this leads to P = [[-(Lambda + Lambda.T), -Lambda], [-Lambda.T, 0]]

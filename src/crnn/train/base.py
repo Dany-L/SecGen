@@ -25,7 +25,7 @@ from ..data_io import (
 from ..datasets import get_datasets, get_loaders
 from ..loss import get_loss_function
 from ..models import base
-from ..models.model_io import get_model_from_config, load_model, set_parameters_to_train
+from ..model_io import get_model_from_config, load_model, set_parameters_to_train
 from ..optimizer import get_optimizer
 from ..scheduler import get_scheduler
 from ..tracker import events as ev

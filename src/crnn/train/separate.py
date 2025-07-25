@@ -1,15 +1,12 @@
 from typing import List, Optional, Tuple
 
-import jax.numpy as jnp
 import torch
-from jax import grad
 from torch import nn
 from torch.optim import Optimizer, lr_scheduler
 from torch.utils.data import DataLoader
 
 from ..configuration.experiment import BaseExperimentConfig
 from ..models import base
-from ..models.jax import base as base_jax
 from ..tracker import events as ev
 from ..tracker.base import AggregatedTracker
 from ..utils import plot
@@ -47,18 +44,14 @@ class SeparateInitPredictor(InitPred):
         for epoch in range(exp_config.epochs):
             loss = 0
             for step, batch in enumerate(init_loader):
-                if isinstance(initializer, base_jax.ConstrainedModule):
-                    # only for compatibility, same behavior as zero initialization
-                    batch_loss = torch.tensor([0.0])
-                else:
-                    initializer.zero_grad()
-                    e_hat_init, _ = initializer.forward(batch["d"])
-                    batch_loss = loss_function(
-                        e_hat_init[:, -1, :], batch["e"][:, -1, :]
-                    )
-                    batch_loss.backward()
-                    opt_init.step()
-                    initializer.set_lure_system()
+                initializer.zero_grad()
+                e_hat_init, _ = initializer.forward(batch["d"])
+                batch_loss = loss_function(
+                    e_hat_init[:, -1, :], batch["e"][:, -1, :]
+                )
+                batch_loss.backward()
+                opt_init.step()
+                initializer.set_lure_system()
                 loss += batch_loss.item()
 
             tracker.track(
@@ -75,36 +68,16 @@ class SeparateInitPredictor(InitPred):
         for epoch in range(exp_config.epochs):
             loss, phi = 0.0, 0.0  # phi is barrier
             for step, batch in enumerate(pred_loader):
-                if isinstance(predictor, base_jax.ConstrainedModule):
-                    # only for compatibility, same behavior as zero initialization
-                    d, e, x0 = (
-                        batch["d"].cpu().detach().numpy(),
-                        batch["e"].cpu().detach().numpy(),
-                        None,
-                    )
-                    theta = predictor.theta
-
-                    def f(theta):
-                        e_hat, _ = predictor.forward(d, x0, theta)
-                        return jnp.mean((e_hat - e) ** 2)
-
-                    dF = grad(f)
-                    theta = base_jax.update(theta, dF)
-                    predictor.theta = theta
-                    e_hat = torch.from_dlpack(predictor.forward(d, x0, theta)[0])
-                    batch_loss = torch.from_dlpack(f(theta))
-                    batch_phi = torch.tensor([0.0])
-                else:
-                    predictor.zero_grad()
-                    initializer.zero_grad()
-                    with torch.no_grad():
-                        _, h0 = initializer.forward(batch["d_init"])
-                    e_hat, _ = predictor.forward(batch["d"], h0)
-                    batch_loss = loss_function(e_hat, batch["e"])
-                    batch_phi = predictor.get_phi(t)
-                    (batch_loss + batch_phi).backward()
-                    opt_pred.step()
-                    predictor.set_lure_system()
+                predictor.zero_grad()
+                initializer.zero_grad()
+                with torch.no_grad():
+                    _, h0 = initializer.forward(batch["d_init"])
+                e_hat, _ = predictor.forward(batch["d"], h0)
+                batch_loss = loss_function(e_hat, batch["e"])
+                batch_phi = predictor.get_phi(t)
+                (batch_loss + batch_phi).backward()
+                opt_pred.step()
+                predictor.set_lure_system()
                 loss += batch_loss.item()
                 phi += batch_phi.item()
 

@@ -2,7 +2,6 @@ import json
 import os
 from typing import Any, Dict, List, Literal, Tuple, Callable
 
-import jax.numpy as jnp
 import numpy as np
 import pandas as pd
 import torch
@@ -22,9 +21,6 @@ from .configuration.base import (
     InputOutputList,
 )
 from .models import base as base
-from .models.jax import base as base_jax
-from .models.jax.recurrent import get_matrices_from_flat_theta
-from .models.torch import base as base_torch
 
 import nonlinear_benchmarks
 
@@ -225,25 +221,14 @@ def save_model(
         str: The path to the saved model file.
     """
     file_path = os.path.join(directory_name, file_name)
-    if isinstance(model, base_jax.ConstrainedModule):
-        par_dict = {
-            n: p
-            for n, p in zip(
-                model.parameter_names, get_matrices_from_flat_theta(model, model.theta)
-            )
-        }
-        jnp.savez(file_path, **par_dict)
-    elif isinstance(model, base_torch.DynamicIdentificationModel):
+    if isinstance(model, base.DynamicIdentificationModel):
         torch.save(model.state_dict(), f"{file_path}.pth")
 
 
 def save_model_parameter(
     model: base.DynamicIdentificationModel, file_name: str
 ) -> None:
-    if isinstance(model, base_jax.ConstrainedModule):
-        par_dict = {n: np.array(p) for n, p in zip(model.parameter_names, model.theta)}
-        savemat(f"{file_name}.mat", par_dict)
-    elif isinstance(model, base_torch.DynamicIdentificationModel):
+    if isinstance(model, base.DynamicIdentificationModel):
         par_dict = {}
         trained_parameters = []
         for name, var in model.named_parameters():

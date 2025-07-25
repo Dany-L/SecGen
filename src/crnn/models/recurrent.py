@@ -2,20 +2,18 @@ from typing import Any, Dict, List, Literal, Optional, Tuple, Union
 
 import numpy as np
 import torch
-from jax.typing import ArrayLike
 from numpy.typing import NDArray
 
-from ...utils import transformation as trans
-from .. import base
-from . import base as base_torch
+from ..utils import transformation as trans
+from . import base
 
 
-class BasicRnnConfig(base_torch.DynamicIdentificationConfig):
+class BasicRnnConfig(base.DynamicIdentificationConfig):
     num_layers: int = 5
     nonlinearity: Literal["tanh", "relu"]
 
 
-class BasicRnn(base_torch.DynamicIdentificationModel):
+class BasicRnn(base.DynamicIdentificationModel):
     CONFIG = BasicRnnConfig
 
     def __init__(
@@ -43,7 +41,7 @@ class BasicRnn(base_torch.DynamicIdentificationModel):
         x0: Optional[
             Union[Tuple[torch.Tensor, torch.Tensor], Tuple[torch.Tensor]]
         ] = None,
-        theta: Optional[ArrayLike] = None,
+        theta: Optional[NDArray[np.float64]] = None,
     ) -> Tuple[
         torch.Tensor,
         Union[Tuple[torch.Tensor, torch.Tensor], Tuple[torch.Tensor]],
@@ -61,12 +59,12 @@ class BasicRnn(base_torch.DynamicIdentificationModel):
         pass
 
 
-class BasicLstmConfig(base_torch.DynamicIdentificationConfig):
+class BasicLstmConfig(base.DynamicIdentificationConfig):
     dropout: float = 0.25
     num_layers: int = 5
 
 
-class BasicLstm(base_torch.DynamicIdentificationModel):
+class BasicLstm(base.DynamicIdentificationModel):
     CONFIG = BasicLstmConfig
 
     def __init__(self, config: BasicLstmConfig) -> None:
@@ -93,7 +91,7 @@ class BasicLstm(base_torch.DynamicIdentificationModel):
         x0: Optional[
             Union[Tuple[torch.Tensor, torch.Tensor], Tuple[torch.Tensor]]
         ] = None,
-        theta: Optional[ArrayLike] = None,
+        theta: Optional[NDArray[np.float64]] = None,
     ) -> Tuple[
         torch.Tensor,
         Union[Tuple[torch.Tensor, torch.Tensor], Tuple[torch.Tensor]],
@@ -107,10 +105,10 @@ class BasicLstm(base_torch.DynamicIdentificationModel):
         pass
 
 
-class BasicLtiRnn(base_torch.ConstrainedModule):
-    CONFIG = base_torch.ConstrainedModuleConfig
+class BasicLtiRnn(base.ConstrainedModule):
+    CONFIG = base.ConstrainedModuleConfig
 
-    def __init__(self, config: base_torch.ConstrainedModuleConfig) -> None:
+    def __init__(self, config: base.ConstrainedModuleConfig) -> None:
         super().__init__(config)
         self.nonlinearity = config.nonlinearity
 

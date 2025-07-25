@@ -141,7 +141,6 @@ class ExperimentConfig(BaseModel):
             experiments[experiment_base_name] = experiment_config
 
             for model in template.models:
-                # if "jax" in model.m_class:
                 model_class = base.retrieve_model_class(model.m_class)
                 models[f"{experiment_base_name}-{model.m_short_name}"] = (
                     BaseModelConfig(

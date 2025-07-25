@@ -17,8 +17,7 @@ from .data_io import get_result_directory_name, load_data, load_normalization
 from .datasets import RecurrentWindowHorizonDataset
 from .metrics import retrieve_metric_class
 from .models import base
-from .models.model_io import get_model_from_config, load_model
-from .models.torch import base as base_torch
+from .model_io import get_model_from_config, load_model
 from .tracker import events as ev
 from .tracker.base import AggregatedTracker
 from .tracker.tracker_io import get_trackers_from_config
@@ -130,7 +129,7 @@ def evaluate_model(
         else:
             theta = None
         if initializer is not None and isinstance(
-            initializer, base_torch.DynamicIdentificationModel
+            initializer, base.DynamicIdentificationModel
         ):
             _, h0 = initializer.forward(
                 torch.unsqueeze(torch.tensor(sample["d_init"]), 0)
@@ -163,7 +162,7 @@ def evaluate_model(
     results["metrics"] = metrics_result
 
     additional_test_results: Dict[str, AdditionalTestResult] = dict()
-    if isinstance(predictor, base_torch.DynamicIdentificationModel):
+    if isinstance(predictor, base.DynamicIdentificationModel):
         for name, additional_test in additional_tests.items():
             tracker.track(ev.Log("", f"Running additional test {name}"))
             result = additional_test.test()
