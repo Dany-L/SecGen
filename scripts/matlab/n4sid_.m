@@ -9,17 +9,27 @@ base_path = fileparts(mfilename('fullpath'));
 % output_names = {'y_1'};
 % ts = 0.2;
 
-system_name = 'F16';
-training_directory = sprintf('~/%s/data/F16GVT_Files/BenchmarkData',system_name);
-validation_directory = sprintf('~/%s/data/F16GVT_Files/BenchmarkData',system_name);
-    input_names = {'Force'};
-    output_names = {'Acceleration1','Acceleration2','Acceleration3'};
-ts = 1/400;
+% f16
+% system_name = 'F16';
+% training_directory = sprintf('~/%s/data/F16GVT_Files/BenchmarkData',system_name);
+% validation_directory = sprintf('~/%s/data/F16GVT_Files/BenchmarkData',system_name);
+%     input_names = {'Force'};
+%     output_names = {'Acceleration1','Acceleration2','Acceleration3'};
+% ts = 1/400;
 
+% test data
+system_name = 'pend_test';
+training_directory = '/Users/jack/Documents/01_Git/01_promotion/crnn/tests/data/train';
+validation_directory = '/Users/jack/Documents/01_Git/01_promotion/crnn/tests/data/validation';
+input_names = {'u_1'};
+output_names = {'y_1'};
+ts = 1/100;
 
 %% load data
-[es_train, ds_train] = utils.load_data_from_dir(training_directory, input_names,output_names, {''}, {'Validation', 'SpecialOdd'});
-[es_val, ds_val] = utils.load_data_from_dir(validation_directory, input_names,output_names, {'Validation'}, {'SpecialOdd'});
+% [es_train, ds_train] = utils.load_data_from_dir(training_directory, input_names,output_names, {''}, {'Validation', 'SpecialOdd'});
+% [es_val, ds_val] = utils.load_data_from_dir(validation_directory, input_names,output_names, {'Validation'}, {'SpecialOdd'});
+[es_train, ds_train] = utils.load_data_from_dir(training_directory, input_names,output_names);
+[es_val, ds_val] = utils.load_data_from_dir(validation_directory, input_names,output_names);
 % print number of training samples
 n_train = 0; for idx = 1:length(es_train), n_train=n_train+size(es_train{idx},1); end, fprintf('Number of training samples %d\n', n_train)
 N = size(es_train{1},1);
@@ -37,6 +47,7 @@ disturbance_model = 'none';
 sys = n4sid(n_train_data, nx, 'DisturbanceModel',disturbance_model);
 elapsed_time = toc;  % Time in seconds
 A = sys.A;B=sys.B; C =sys.C; D=sys.D; K = sys.K;
+step_info = stepinfo(sys);
 
 % Build struct to store
 sys_struct = struct();
@@ -51,6 +62,7 @@ sys_struct.num_samples = n_train;
 sys_struct.is_stable = isstable(sys);
 sys_struct.n4sid_info = struct(sys.Report);
 sys_struct.elapsed_time_sec = elapsed_time;
+sys_struct.transient_time = step_info.TransientTime;
 
 % Convert to HH:MM:SS using duration
 elapsed_duration = duration(0, 0, elapsed_time);

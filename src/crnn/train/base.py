@@ -2,35 +2,30 @@ import json
 import os
 import time
 from abc import ABC, abstractmethod
-from typing import Callable, List, Optional, Tuple, Type, Dict, Any
+from typing import List, Optional, Tuple, Type, Dict, Any
 
-import matplotlib.pyplot as plt
 import numpy as np
 import torch
-from matplotlib.figure import Figure
 from torch import nn
 from torch.optim import Optimizer, lr_scheduler
 from torch.utils.data import DataLoader
 
 from ..configuration.experiment import BaseExperimentConfig, load_configuration
-from ..configuration.base import InputOutputList
-from ..data_io import (
+from ..io.data import (
     get_result_directory_name,
     load_data,
     load_initialization,
     load_normalization,
-    process_data,
-    save_trajectories_to_csv
 )
 from ..datasets import get_datasets, get_loaders
 from ..loss import get_loss_function
 from ..models import base
-from ..model_io import get_model_from_config, load_model, set_parameters_to_train
+from ..io.model import get_model_from_config, load_model, set_parameters_to_train
 from ..optimizer import get_optimizer
 from ..scheduler import get_scheduler
 from ..tracker import events as ev
 from ..tracker.base import AggregatedTracker
-from ..tracker.tracker_io import get_trackers_from_config
+from ..io.tracker import get_trackers_from_config
 from ..utils import base as utils
 from ..systemtheory.analysis import get_transient_time
 
@@ -53,7 +48,7 @@ class InitPred(ABC):
         schedulers: List[lr_scheduler.ReduceLROnPlateau],
         tracker: AggregatedTracker = AggregatedTracker(),
         initialize: bool = True,
-        raw_data: Dict[str, Any] = None
+        raw_data: Optional[Dict[str, Any]] = None,
     ) -> Tuple[Optional[base.DynamicIdentificationModel]]:
         pass
 
@@ -111,29 +106,40 @@ def train(
         "train",
         dataset_dir,
     )
-    tracker.track(ev.Log("", f'Training samples: {np.sum([train_input.shape[0] for train_input in train_inputs])}'))
-
+    tracker.track(
+        ev.Log(
+            "",
+            f"Training samples: {np.sum([train_input.shape[0] for train_input in train_inputs])}",
+        )
+    )
 
     init_data = load_initialization(result_directory)
 
     if not init_data.data:
-        ss, mse, fit = base.run_n4sid(
+        ss, fit, rmse = base.run_n4sid(
             train_inputs,
             train_outputs,
             dt=experiment_config.dt,
-            nx=experiment_config.nx
+            nx=experiment_config.nz,
         )
-        tracker.track(ev.Log("", f'Evaluation of linear approximation on training data: Fit= {fit}, MSE= {mse}'))
-        transient_time = int(np.max(get_transient_time(ss)/experiment_config.dt))
+        tracker.track(
+            ev.Log(
+                "",
+                f"Evaluation of linear approximation on training data: Fit= {fit}, MSE= {rmse}",
+            )
+        )
+        transient_time = int(np.max(get_transient_time(ss) / experiment_config.dt))
+        # transient_time = 10
         tracker.track(ev.TrackParameter("", "transient_time", transient_time))
-        tracker.track(ev.SaveInitialization("", ss, {'transient_time':transient_time}))
+        tracker.track(ev.SaveInitialization("", ss, {"transient_time": transient_time}))
+        init_data.data = {"ss": ss, "transient_time": transient_time}
 
     else:
         ss = init_data.data["ss"]
         transient_time = init_data.data["transient_time"]
-    
+
     horizon = transient_time
-    window = int(0.1*horizon)
+    window = int(0.1 * horizon)
 
     # tracker.track(ev.Log("", f"window: {window}, horizon: {horizon}"))
 
@@ -143,10 +149,15 @@ def train(
         "validation",
         dataset_dir,
     )
-    tracker.track(ev.Log("", f'Validation samples: {np.sum([val_input.shape[0] for val_input in val_inputs])}'))
+    tracker.track(
+        ev.Log(
+            "",
+            f"Validation samples: {np.sum([val_input.shape[0] for val_input in val_inputs])}",
+        )
+    )
 
     # D_ood, D_test, D_val = process_data(train_inputs+val_inputs, train_outputs+val_outputs, window, horizon)
- 
+
     # train_inputs, train_outputs = D_test
     # val_inputs, val_outputs = D_val
     # ood_input, ood_output = D_ood
@@ -182,7 +193,6 @@ def train(
     n_val_inputs = utils.normalize(val_inputs, input_mean, input_std)
     n_val_outputs = utils.normalize(val_outputs, output_mean, output_std)
 
-
     start_time = time.time()
     with torch.device(device):
         loaders = [
@@ -199,10 +209,11 @@ def train(
             for inp, output, horizon, batch_size in zip(
                 [n_train_inputs, n_val_inputs],
                 [n_train_outputs, n_val_outputs],
-                [
-                    experiment_config.horizons.training,
-                    experiment_config.horizons.validation,
-                ],
+                # [
+                #     experiment_config.horizons.training,
+                #     experiment_config.horizons.validation,
+                # ],
+                [horizon, horizon],
                 [experiment_config.batch_size, 1],
             )
         ]
@@ -210,10 +221,11 @@ def train(
         (initializer, predictor) = get_model_from_config(model_config)
 
         initializer.set_lure_system()
-        # init_data = predictor.initialize_parameters(
-        #     n_train_inputs, n_train_outputs, init_data.data
-        # )
-        # tracker.track(ev.Log("", init_data.msg))
+        # predictor.set_lure_system()
+        init_data = predictor.initialize_parameters(
+            n_train_inputs, n_train_outputs, init_data.data
+        )
+        tracker.track(ev.Log("", init_data.msg))
         # if init_data.data:
         #     tracker.track(ev.SaveInitialization("", init_data.data["ss"], {}))
         optimizers = get_optimizer(experiment_config, (initializer, predictor))
@@ -358,7 +370,7 @@ def continue_training(
             )
             if not all_pars == trained_pars:
                 tracker.track(
-                    ev.Log("", f"Parameters to train: {all_pars-trained_pars}")
+                    ev.Log("", f"Parameters to train: {all_pars - trained_pars}")
                 )
                 for model in [initializer, predictor]:
                     set_parameters_to_train(model, par_dict["trained_parameters"])
@@ -397,116 +409,6 @@ def continue_training(
     tracker.track(ev.Log("", f"Training duration: {training_duration}"))
     tracker.track(ev.TrackMetrics("", {"training_duration": stop_time - start_time}))
     tracker.track(ev.Stop(""))
-
-
-class Armijo:
-    def __init__(
-        self,
-        f: Callable[[torch.Tensor], torch.Tensor],
-        dF: Callable[[torch.Tensor], torch.Tensor],
-        s0: float = 1.0,
-        alpha: float = 0.4,
-        beta: float = 0.4,
-    ):
-        self.f = f
-        self.dF = dF
-        self.s0 = s0
-        self.alpha = alpha
-        self.beta = beta
-
-    # @partial(jit, static_argnames=['self'])
-    def linesearch(self, theta: torch.Tensor, dir: torch.Tensor) -> torch.Tensor:
-        f, dF, s, alpha, beta = self.f, self.dF, self.s0, self.alpha, self.beta
-        i = 0
-        while f(theta + s * dir) > f(theta) + alpha * s * dir.T @ dF(
-            theta
-        ) or self.get_isnan(f(theta + s * dir)):
-
-            s = beta * s
-            # print(torch.squeeze(theta+s*dir))
-            i += 1
-            if i > 100:
-                # raise ValueError
-                return s
-        # print(f'linesearch steps: {i}')
-        return s
-
-    def get_isnan(self, value):
-        if isinstance(value, torch.Tensor):
-            return torch.isnan(value)
-        else:
-            return np.isnan(value)
-
-    def plot_step_size_function(self, theta) -> Figure:
-        ss, s = [], self.s0
-        for i in range(10):
-            ss.append(s)
-            s = self.beta * s
-
-        fig, ax = plt.subplots(figsize=(10, 5))
-        dir = -self.dF(theta)
-        s = np.linspace(0, 1, 100)
-        # print(f'dF(theta):{self.dF(theta)}, theta:{theta}')
-        if isinstance(theta, torch.Tensor):
-            ax.plot(
-                s,
-                np.vectorize(
-                    lambda s: (self.f(theta + s * dir)).cpu().detach().numpy()
-                )(s),
-                label="f(x+sd)",
-            )
-            ax.plot(
-                s,
-                np.vectorize(
-                    lambda s: (self.f(theta) + s * self.dF(theta).T @ dir)
-                    .detach()
-                    .numpy()
-                )(s),
-                label="f(x)+s dF.T d",
-            )
-            ax.plot(
-                s,
-                np.vectorize(
-                    lambda s: (self.f(theta) + self.alpha * s * self.dF(theta).T @ dir)
-                    .detach()
-                    .numpy()
-                )(s),
-                label="f(x)+alpha s dF.T d",
-            )
-        else:
-            ax.plot(
-                s,
-                np.vectorize(lambda s: (self.f(theta + s * dir)))(s),
-                label="f(x+sd)",
-            )
-            f_s_dF_d = np.zeros_like(s)
-            for idx, s_i in enumerate(s):
-                f_s_dF_d[idx] = np.squeeze(self.f(theta) + s_i * self.dF(theta).T @ dir)
-
-            ax.plot(
-                s,
-                f_s_dF_d,
-                label="f(x)+s dF.T d",
-            )
-            f_a_s_a_dF_d = np.zeros_like(s)
-            for idx, s_i in enumerate(s):
-                f_a_s_a_dF_d[idx] = np.squeeze(
-                    self.f(theta) + self.alpha * s_i * self.dF(theta).T @ dir
-                )
-            ax.plot(
-                s,
-                f_a_s_a_dF_d,
-                label="f(x)+alpha s dF.T d",
-            )
-        # for s in ss:
-        #     ax.plot(s,self.f(theta)+self.alpha*s*self.dF(theta).T @ dir, 'x')
-        #     ax.plot(s,self.f(theta)+s*self.dF(theta).T @ dir, 'x')
-        #     ax.plot(s,self.f(theta+s*dir),'x')
-        ax.grid()
-        ax.set_xlabel("s")
-        ax.legend()
-
-        return fig
 
 
 def retrieve_trainer_class(

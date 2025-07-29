@@ -13,7 +13,7 @@ from ..tracker import events as ev
 from ..tracker.base import AggregatedTracker
 from ..utils import plot
 from ..utils import transformation as trans
-from .base import PLOT_AFTER_EPOCHS, Armijo, InitPred
+from .base import InitPred
 
 
 class ZeroInitPredictor(InitPred):
@@ -113,54 +113,14 @@ class ZeroInitPredictor(InitPred):
                 torch.zeros((predictor.get_number_of_parameters(), 1)),
             )  # phi is barrier
 
-            with tqdm(enumerate(train_loader), total=len(train_loader), desc=f"Epoch {epoch+1}/{exp_config.epochs}") as pbar:
+            with tqdm(
+                enumerate(train_loader),
+                total=len(train_loader),
+                desc=f"Epoch {epoch + 1}/{exp_config.epochs}",
+            ) as pbar:
                 for step, batch in pbar:
-                    # predictor.zero_grad()
-                    if exp_config.ensure_constrained_method == "armijo":
-                        if isinstance(predictor, base.ConstrainedModule):
-                            opt_fcn = base.OptFcn(
-                                batch["d"], batch["e"], predictor, t, loss=loss_function
-                            )
 
-                            def f(theta: torch.Tensor) -> torch.Tensor:
-                                return opt_fcn.f(theta)
-
-                            def dF(theta: torch.Tensor) -> torch.Tensor:
-                                return opt_fcn.dF(theta).reshape((-1, 1))
-
-                            theta = torch.hstack(
-                                [
-                                    p.flatten().clone()
-                                    for p in predictor.parameters()
-                                    if p is not None
-                                ]
-                            ).reshape(-1, 1)
-
-                            batch_loss, batch_phi = f(theta), torch.tensor(0.0)
-
-                            arm = Armijo(f, dF, 1)
-                            dir = -dF(theta)
-                            s = arm.linesearch(theta, dir)
-
-                            tracker.track(
-                                ev.TrackMetrics(
-                                    "",
-                                    {
-                                        "loss.step": float(batch_loss),
-                                        "stepsize.step": float(s),
-                                    },
-                                    epoch * len(train_loader) + step,
-                                )
-                            )
-
-                        else:
-                            e_hat, _ = predictor.forward(batch["d"])
-                            batch_loss = loss_function(e_hat, batch["e"])
-                            batch_phi = torch.tensor([0.0])
-                            (batch_loss + batch_phi).backward()
-                            opt_pred.step()
-
-                    elif exp_config.ensure_constrained_method == "project":
+                    if exp_config.ensure_constrained_method == "project":
                         predictor.zero_grad()
                         e_hat, _ = predictor.forward(batch["d"])
                         batch_loss = loss_function(e_hat, batch["e"])
@@ -220,7 +180,8 @@ class ZeroInitPredictor(InitPred):
                         ):
                             if len(F_i().shape) > 0:
                                 min_eigenvals[idx] = -(
-                                    torch.min(torch.real(torch.linalg.eig(F_i())[0])) - 1e-3
+                                    torch.min(torch.real(torch.linalg.eig(F_i())[0]))
+                                    - 1e-3
                                 )
 
                             else:
@@ -257,12 +218,14 @@ class ZeroInitPredictor(InitPred):
                     phi += batch_phi.item()
 
                     # Update progress bar
-                    pbar.set_postfix({
-                        "loss": loss / (step + 1),
-                        "phi": phi / (step + 1),
-                        "projections": projection_counter,
-                        "backtracking": num_backtracking_steps,
-                    })
+                    pbar.set_postfix(
+                        {
+                            "loss": loss / (step + 1),
+                            "phi": phi / (step + 1),
+                            "projections": projection_counter,
+                            "backtracking": num_backtracking_steps,
+                        }
+                    )
 
             if (
                 not predictor.check_constraints()

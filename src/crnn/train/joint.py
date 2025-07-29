@@ -1,7 +1,5 @@
 from typing import List, Optional, Tuple
 
-import numpy as np
-import torch
 from torch import nn
 from torch.optim import Optimizer, lr_scheduler
 from torch.utils.data import DataLoader

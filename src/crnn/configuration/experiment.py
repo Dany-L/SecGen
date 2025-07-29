@@ -90,13 +90,10 @@ class BaseExperimentConfig(BaseModel):
     horizons: HorizonsConfig
     initial_hidden_state: Literal["zero", "joint", "separate"]
     t: float = 1.0
-    nx: int = 10
     increase_rate: float = 10.0
     increase_after_epochs: int = 100
     debug: bool = False
-    ensure_constrained_method: Literal["armijo", "project", "backtracking", "dual"] = (
-        "project"
-    )
+    ensure_constrained_method: Literal["project", "backtracking", "dual"] = "project"
     initialization: Literal["project", "n4sid"] = "project"
 
 

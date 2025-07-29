@@ -46,9 +46,7 @@ class SeparateInitPredictor(InitPred):
             for step, batch in enumerate(init_loader):
                 initializer.zero_grad()
                 e_hat_init, _ = initializer.forward(batch["d"])
-                batch_loss = loss_function(
-                    e_hat_init[:, -1, :], batch["e"][:, -1, :]
-                )
+                batch_loss = loss_function(e_hat_init[:, -1, :], batch["e"][:, -1, :])
                 batch_loss.backward()
                 opt_init.step()
                 initializer.set_lure_system()

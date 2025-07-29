@@ -1,6 +1,5 @@
 import json
 import os
-import pathlib
 from typing import Literal, Optional
 
 import mlflow

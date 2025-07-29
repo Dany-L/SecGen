@@ -13,14 +13,14 @@ from .additional_tests import (
 )
 from .configuration.base import InputOutput, Normalization
 from .configuration.experiment import load_configuration
-from .data_io import get_result_directory_name, load_data, load_normalization
+from .io.data import get_result_directory_name, load_data, load_normalization
 from .datasets import RecurrentWindowHorizonDataset
 from .metrics import retrieve_metric_class
 from .models import base
-from .model_io import get_model_from_config, load_model
+from .io.model import get_model_from_config, load_model
 from .tracker import events as ev
 from .tracker.base import AggregatedTracker
-from .tracker.tracker_io import get_trackers_from_config
+from .io.tracker import get_trackers_from_config
 from .utils import base as utils
 from .utils import plot
 

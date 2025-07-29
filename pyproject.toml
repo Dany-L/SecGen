@@ -27,8 +27,37 @@ test = [
     "black",
     "isort",
     "mypy",
-    "flake8"
+    "flake8",
+    "pytest",
+    "pytest-xdist"
 ]
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+addopts = "-v --tb=short --strict-markers"
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+    "smoke: marks tests as smoke tests",
+    "benchmark: marks tests as benchmark tests"
+]
+
+# Filter out specific deprecation warnings
+filterwarnings = [
+    "ignore::DeprecationWarning:google._upb._message",
+    "ignore::DeprecationWarning:<frozen importlib._bootstrap>",
+    "ignore:Type google._upb._message.*uses PyType_Spec.*:DeprecationWarning"
+]
+
+# Configure logging
+log_cli = true
+log_cli_level = "INFO"
+log_cli_format = "%(asctime)s [%(levelname)8s] %(name)s: %(message)s"
+log_cli_date_format = "%Y-%m-%d %H:%M:%S"
 
 
 

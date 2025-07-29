@@ -40,7 +40,6 @@
         "static_parameters":{
             "debug": true,
             "t": 1e3,
-            "ensure_constrained_method": "armijo",
             "increase_rate": 10.0,
             "increase_after_epochs": 20,
             "epochs": 2,
@@ -55,7 +54,8 @@
             "loss_function": "mse",
             "horizons":{
                 "training": 40,
-                "testing": 100
+                "testing": 100,
+                "validation": 50
             },
             "input_names":[
                 "u_1"
@@ -71,21 +71,21 @@
                 "zero",
                 "joint"
             ],
-            "ensure_constrained_method": ["project","armijo", "backtracking", "dual"]
+            "ensure_constrained_method": ["project", "backtracking", "dual"]
         }
 
     },
     "models": [
         {
             "m_short_name": "ltiRnn",
-            "m_class": "crnn.models.torch.recurrent.BasicLtiRnn",
+            "m_class": "crnn.models.recurrent.BasicLtiRnn",
             "parameters": {
                 "nonlinearity": "tanh"
             }
         },
         {
             "m_short_name": "lstm",
-            "m_class": "crnn.models.torch.recurrent.BasicLstm",
+            "m_class": "crnn.models.recurrent.BasicLstm",
             "parameters": {
                 "dropout": 0.25,
                 "num_layers": 2
@@ -93,7 +93,7 @@
         },
         {
             "m_short_name" : "rnn",
-            "m_class": "crnn.models.torch.recurrent.BasicRnn",
+            "m_class": "crnn.models.recurrent.BasicRnn",
             "parameters": {
                 "num_layers": 2,
                 "nonlinearity": "tanh"
@@ -101,7 +101,7 @@
         },
         {
             "m_short_name" : "tanh",
-            "m_class": "crnn.models.torch.constrained.ConstrainedLtiRnn",
+            "m_class": "crnn.models.constrained.ConstrainedLtiRnn",
             "parameters": {
                 "nonlinearity": "tanh",
                 "multiplier": "diag"
@@ -109,7 +109,7 @@
         },
         {
             "m_short_name" : "dzn",
-            "m_class": "crnn.models.torch.constrained.ConstrainedLtiRnn",
+            "m_class": "crnn.models.constrained.ConstrainedLtiRnn",
             "parameters": {
                 "nonlinearity": "deadzone",
                 "multiplier": "none"
@@ -117,7 +117,7 @@
         },
         {
             "m_short_name" : "dznGen",
-            "m_class": "crnn.models.torch.constrained.ConstrainedLtiRnnGeneralSectorConditions",
+            "m_class": "crnn.models.constrained.ConstrainedLtiRnnGeneralSectorConditions",
             "parameters": {
                 "nonlinearity": "deadzone"
             }

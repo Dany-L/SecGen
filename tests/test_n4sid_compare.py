@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import json
 from utils import load_filtered_csvs
 
-from crnn.models.base import N4SID, N4SID_NG_with_nfoursid, simulate_linear_system
+from crnn.models.base import N4SID_NG_with_nfoursid, simulate_linear_system
 
 def compute_fit_percent(y_true: np.ndarray, y_pred: np.ndarray) -> np.ndarray:
     # Returns fit percentage for each output channel
@@ -58,8 +58,7 @@ def test_n4sid_vs_matlab(
     es_norm = (es - es_mean) / es_std
 
     # Run Python N4SID
-    # A_py, B_py, C_py, D_py, _, _ = N4SID_NG_with_nfoursid(ds_norm, es_norm, nx, enforce_stability_method="projection")
-    A_py, B_py, C_py, D_py, _, _ = N4SID(ds_norm, es_norm, nx,require_stable=True, enforce_stability_method="projection")
+    A_py, B_py, C_py, D_py, _, _ = N4SID_NG_with_nfoursid(ds_norm, es_norm, nx, enforce_stability_method="projection")
 
     # Compare eigenvalues
     compare_eigenvalues(A_py, A_mat)

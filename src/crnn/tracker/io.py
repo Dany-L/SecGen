@@ -8,7 +8,7 @@ from ..configuration.base import (
     NORMALIZATION_FILENAME,
     SEQ_FOLDER_NAME,
 )
-from ..data_io import (
+from ..io.data import (
     save_input_output_to_mat,
     save_model,
     save_model_parameter,
@@ -54,7 +54,7 @@ class IoTracker(BaseTracker):
                 B=event.ss.B.cpu().detach().numpy().tolist(),
                 C=event.ss.C.cpu().detach().numpy().tolist(),
                 D=event.ss.D.cpu().detach().numpy().tolist(),
-                dt=event.ss.dt,
+                dt=event.ss.dt.cpu().detach().numpy().tolist(),
             )
             event.data["ss"] = ss
             with open(

@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Literal, Optional, Tuple, Union
+from typing import Literal, Optional, Tuple, Union
 
 import numpy as np
 import torch
@@ -55,8 +55,8 @@ class BasicRnn(base.DynamicIdentificationModel):
         e_hat = self.output_layer.forward(x)
         return (e_hat, (h,))
 
-    def project_parameters(self) -> None:
-        pass
+    def project_parameters(self) -> str:
+        return "No parameters to project"
 
 
 class BasicLstmConfig(base.DynamicIdentificationConfig):
@@ -101,8 +101,8 @@ class BasicLstm(base.DynamicIdentificationModel):
         e_hat = self.output_layer.forward(x)
         return (e_hat, (h, c))
 
-    def project_parameters(self) -> None:
-        pass
+    def project_parameters(self) -> str:
+        return "No parameters to project"
 
 
 class BasicLtiRnn(base.ConstrainedModule):
@@ -156,5 +156,5 @@ class BasicLtiRnn(base.ConstrainedModule):
     def check_constraints(self) -> bool:
         return True
 
-    def project_parameters(self) -> None:
-        pass
+    def project_parameters(self) -> str:
+        return "No parameters to project"

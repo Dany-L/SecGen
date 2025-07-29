@@ -54,7 +54,7 @@
             "loss_function": "mse",
             "horizons":{
                 "training": 39,
-                "validation": 39,
+                "validation": 20,
                 "testing": 99
             },
             "input_names":[
@@ -77,7 +77,7 @@
     "models": [
         {
             "m_short_name" : "satGen",
-            "m_class": "crnn.models.torch.constrained.ConstrainedLtiRnnGeneralSectorConditionsTransformed",
+            "m_class": "crnn.models.constrained.ConstrainedLtiRnnGeneralSectorConditionsTransformed",
             "parameters": {
                 "nonlinearity": "sat",
                 "multiplier": "diag"

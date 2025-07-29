@@ -1,10 +1,10 @@
 import os
 from typing import List, Tuple
 
-from .configuration.experiment import BaseExperimentConfig, BaseModelConfig
-from .utils import base as utils
-from .models import base as base
-from .models.recurrent import BasicLstm
+from ..configuration.experiment import BaseExperimentConfig, BaseModelConfig
+from ..utils import base as utils
+from ..models import base as base
+from ..models.recurrent import BasicLstm
 
 
 def get_model_from_config(
