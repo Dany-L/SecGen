@@ -11,11 +11,13 @@ from torch.optim import Optimizer, lr_scheduler
 from torch.utils.data import DataLoader
 
 from ..configuration.experiment import BaseExperimentConfig, load_configuration
+from ..configuration.base import PreprocessingResults, Normalization
 from ..io.data import (
     get_result_directory_name,
     load_data,
     load_initialization,
     load_normalization,
+    check_data_availability,
 )
 from ..datasets import get_datasets, get_loaders
 from ..loss import get_loss_function
@@ -30,6 +32,52 @@ from ..utils import base as utils
 from ..systemtheory.analysis import get_transient_time
 
 PLOT_AFTER_EPOCHS: int = 100
+
+
+def load_preprocessing_results(
+    result_directory: str, 
+    experiment_config: BaseExperimentConfig, 
+    dataset_dir: str
+) -> Optional[PreprocessingResults]:
+    """
+    Load preprocessing results from saved files or return None if not available.
+    
+    Args:
+        result_directory: Directory where preprocessing results are saved
+        experiment_config: Experiment configuration
+        dataset_dir: Dataset directory
+        
+    Returns:
+        PreprocessingResults or None: Preprocessing results if available, None otherwise
+    """
+    init_data = load_initialization(result_directory)
+    normalization: Optional[Normalization] = None
+    
+    try:
+        normalization = load_normalization(result_directory)
+    except (FileNotFoundError, OSError):
+        # Normalization data not found
+        pass
+    
+    if init_data.data and normalization:
+        # Calculate horizon and window from existing data
+        transient_time = init_data.data["transient_time"]
+        horizon = transient_time
+        window = int(0.1 * horizon)
+        
+        from ..configuration.base import SystemIdentificationResults
+        
+        return PreprocessingResults(
+            system_identification=SystemIdentificationResults(
+                ss=init_data.data["ss"],
+                transient_time=transient_time
+            ),
+            horizon=horizon,
+            window=window,
+            normalization=normalization
+        )
+    
+    return None
 
 
 class InitPred(ABC):
@@ -99,7 +147,43 @@ def train(
         )
     )
 
-    # training data
+    # Check if preprocessing results are available
+    preprocessing_results = load_preprocessing_results(result_directory, experiment_config, dataset_dir)
+    
+    if preprocessing_results is None:
+        tracker.track(ev.Log("", "No preprocessing results found. Please run preprocessing.py first."))
+        raise RuntimeError(
+            f"Preprocessing results not found in {result_directory}. "
+            "Please run scripts/preprocessing.py before training."
+        )
+    
+    # Check data availability
+    data_availability = check_data_availability(dataset_dir)
+    missing_data = [data_type for data_type, available in data_availability.items() if not available]
+    
+    if missing_data:
+        dataset_name = os.path.basename(os.path.dirname(os.path.dirname(dataset_dir)))
+        tracker.track(ev.Log("", f"Missing data types: {missing_data}"))
+        raise RuntimeError(
+            f"Missing data in {dataset_dir}: {missing_data}. "
+            f"Please run scripts/prepare_data.py {dataset_name} {dataset_dir} first."
+        )
+    
+    # Extract preprocessing results
+    ss = preprocessing_results.system_identification.ss
+    transient_time = preprocessing_results.system_identification.transient_time
+    horizon = preprocessing_results.horizon
+    window = preprocessing_results.window
+    
+    input_mean = preprocessing_results.normalization.input.mean
+    input_std = preprocessing_results.normalization.input.std
+    output_mean = preprocessing_results.normalization.output.mean
+    output_std = preprocessing_results.normalization.output.std
+    
+    tracker.track(ev.Log("", f"Using preprocessing results - window: {window}, horizon: {horizon}"))
+    tracker.track(ev.TrackParameter("", "transient_time", transient_time))
+    
+    # Load and normalize data
     train_inputs, train_outputs = load_data(
         experiment_config.input_names,
         experiment_config.output_names,
@@ -112,37 +196,7 @@ def train(
             f"Training samples: {np.sum([train_input.shape[0] for train_input in train_inputs])}",
         )
     )
-
-    init_data = load_initialization(result_directory)
-
-    if not init_data.data:
-        ss, fit, rmse = base.run_n4sid(
-            train_inputs,
-            train_outputs,
-            dt=experiment_config.dt,
-            nx=experiment_config.nz,
-        )
-        tracker.track(
-            ev.Log(
-                "",
-                f"Evaluation of linear approximation on training data: Fit= {fit}, MSE= {rmse}",
-            )
-        )
-        transient_time = int(np.max(get_transient_time(ss) / experiment_config.dt))
-        # transient_time = 10
-        tracker.track(ev.TrackParameter("", "transient_time", transient_time))
-        tracker.track(ev.SaveInitialization("", ss, {"transient_time": transient_time}))
-        init_data.data = {"ss": ss, "transient_time": transient_time}
-
-    else:
-        ss = init_data.data["ss"]
-        transient_time = init_data.data["transient_time"]
-
-    horizon = transient_time
-    window = int(0.1 * horizon)
-
-    # tracker.track(ev.Log("", f"window: {window}, horizon: {horizon}"))
-
+    
     val_inputs, val_outputs = load_data(
         experiment_config.input_names,
         experiment_config.output_names,
@@ -155,43 +209,15 @@ def train(
             f"Validation samples: {np.sum([val_input.shape[0] for val_input in val_inputs])}",
         )
     )
-
-    # D_ood, D_test, D_val = process_data(train_inputs+val_inputs, train_outputs+val_outputs, window, horizon)
-
-    # train_inputs, train_outputs = D_test
-    # val_inputs, val_outputs = D_val
-    # ood_input, ood_output = D_ood
-
-    # save_trajectories_to_csv(ood_input, ood_output,experiment_config.input_names, experiment_config.output_names,os.path.join(dataset_dir, 'ood'))
-
-    input_mean, input_std = utils.get_mean_std(train_inputs)
-    output_mean, output_std = utils.get_mean_std(train_outputs)
+    
+    # Normalize data using preprocessing parameters
     n_train_inputs = utils.normalize(train_inputs, input_mean, input_std)
     n_train_outputs = utils.normalize(train_outputs, output_mean, output_std)
-    tracker.track(
-        ev.SaveNormalization(
-            "",
-            input=ev.NormalizationParameters(input_mean, input_std),
-            output=ev.NormalizationParameters(output_mean, output_std),
-        )
-    )
-    assert (
-        np.mean(np.vstack(n_train_inputs) < 1e-5)
-        and np.std(np.vstack(n_train_inputs)) - 1 < 1e-5
-    )
-    assert (
-        np.mean(np.vstack(n_train_outputs) < 1e-5)
-        and np.std(np.vstack(n_train_outputs)) - 1 < 1e-5
-    )
-    # validation data
-    val_inputs, val_outputs = load_data(
-        experiment_config.input_names,
-        experiment_config.output_names,
-        "validation",
-        dataset_dir,
-    )
     n_val_inputs = utils.normalize(val_inputs, input_mean, input_std)
     n_val_outputs = utils.normalize(val_outputs, output_mean, output_std)
+    
+    # Create init_data for model initialization
+    init_data = load_initialization(result_directory)
 
     start_time = time.time()
     with torch.device(device):
@@ -200,19 +226,15 @@ def train(
                 get_datasets(
                     inp,
                     output,
-                    horizon,
+                    h,
                     window,
                 ),
                 batch_size,
                 device,
             )
-            for inp, output, horizon, batch_size in zip(
+            for inp, output, h, batch_size in zip(
                 [n_train_inputs, n_val_inputs],
                 [n_train_outputs, n_val_outputs],
-                # [
-                #     experiment_config.horizons.training,
-                #     experiment_config.horizons.validation,
-                # ],
                 [horizon, horizon],
                 [experiment_config.batch_size, 1],
             )

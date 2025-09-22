@@ -62,6 +62,15 @@ class HorizonsConfig(BaseModel):
     validation: int
 
 
+class TestSplitConfig(BaseModel):
+    id: float
+    ood: float
+
+class SplitConfig(BaseModel):
+    val: float
+    test: TestSplitConfig
+
+
 class ExperimentSettings(BaseModel):
     experiment_base_name: str
     metrics: Dict[str, ExperimentMetric]

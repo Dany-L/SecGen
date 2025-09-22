@@ -8,7 +8,7 @@ def get_trackers_from_config(
     config: Dict[str, BaseTrackerConfig],
     result_directory: str,
     model_name: str,
-    type: Literal["training", "validation"],
+    type: Literal["preprocessing", "training", "validation"],
 ) -> List[BaseTracker]:
     trackers = []
     for tracker_config in config.values():

@@ -696,7 +696,7 @@ def N4SID_NG_with_nfoursid(
 
     if NumRows is None and NumCols is None:
         NumRows = 15 * nx
-        NumCols = NumVals - 2 * NumRows + 1
+        NumCols = max(NumVals - 2 * NumRows + 1, 0)
 
     assert (
         NumVals >= 2 * NumRows + NumCols - 1

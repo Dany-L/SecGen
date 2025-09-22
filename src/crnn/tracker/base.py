@@ -23,7 +23,7 @@ class BaseTracker:
         config: Optional[TrackerConfig] = None,
         directory: str = os.environ["HOME"],
         model_name: str = "",
-        type: Literal["training", "validation"] = "training",
+        type: Literal["preprocessing","training", "validation"] = "training",
     ) -> None:
         self.directory = directory
         self.model_name = model_name
@@ -34,6 +34,7 @@ class BaseTracker:
         pass
 
 
+
 class AggregatedTracker:
     def __init__(self, trackers: List[BaseTracker] = []) -> None:
         self.trackers = trackers
@@ -41,6 +42,16 @@ class AggregatedTracker:
     def track(self, event: Event) -> None:
         for tracker in self.trackers:
             tracker.track(event)
+
+
+_aggregated_tracker_instance = None
+
+def set_aggregated_tracker(tracker: AggregatedTracker) -> None:
+    global _aggregated_tracker_instance
+    _aggregated_tracker_instance = tracker
+
+def get_aggregated_tracker() -> AggregatedTracker:
+    return _aggregated_tracker_instance
 
 
 def retrieve_tracker_class(tracker_class_string: str) -> Type[BaseTracker]:

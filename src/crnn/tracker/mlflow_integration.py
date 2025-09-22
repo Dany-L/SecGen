@@ -21,7 +21,7 @@ class MlFlowTracker(BaseTracker):
         config: MlflowConfig,
         directory: str = os.environ["HOME"],
         model_name: str = "",
-        type: Literal["training", "validation"] = "training",
+        type: Literal["preprocessing", "training", "validation"] = "training",
     ) -> None:
         super().__init__(config, directory, model_name, type)
         if hasattr(config.parameters, "tracking_uri"):
