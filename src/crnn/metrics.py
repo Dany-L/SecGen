@@ -37,6 +37,79 @@ class Rmse(Metrics):
             for e_idx in range(ne):
                 rmse[e_idx] += 1 / h * np.sum((e[:, e_idx] - e_hat[:, e_idx]) ** 2)
         return np.sqrt(1 / M * rmse)
+    
+class Nrmse(Metrics):
+    def __init__(self, config: MetricConfig):
+        pass
+
+    def forward(
+        self, es: List[NDArray[np.float64]], e_hats: List[NDArray[np.float64]]
+    ) -> np.float64:
+        M = len(es)
+        h, ne = es[0].shape
+        nrmse = np.zeros((ne))
+        for e, e_hat in zip(es, e_hats):
+            for e_idx in range(ne):
+                nrmse[e_idx] += np.sum((e[:, e_idx] - e_hat[:, e_idx]) ** 2) / np.sum(
+                    (e[:, e_idx] - np.mean(e[:, e_idx])) ** 2
+                )
+        return np.sqrt(1 / M * nrmse)
+    
+class Fit(Metrics):
+    def __init__(self, config: MetricConfig):
+        pass
+
+    def forward(
+        self, es: List[NDArray[np.float64]], e_hats: List[NDArray[np.float64]]
+    ) -> np.float64:
+        M = len(es)
+        h, ne = es[0].shape
+        fit = np.zeros((ne))
+        for e, e_hat in zip(es, e_hats):
+            for e_idx in range(ne):
+                fit[e_idx] += 1 - np.linalg.norm(e[:, e_idx] - e_hat[:, e_idx]) / np.linalg.norm(
+                    e[:, e_idx] - np.mean(e[:, e_idx])
+                )
+        return 100 * fit / M
+    
+class PsdRmse(Metrics):
+    def __init__(self, config: MetricConfig):
+        pass
+
+    def forward(
+        self, es: List[NDArray[np.float64]], e_hats: List[NDArray[np.float64]]
+    ) -> np.float64:
+        M = len(es)
+        ne = es[0].shape[1]
+        psd_rmse = np.zeros((ne))
+        for e, e_hat in zip(es, e_hats):
+            for e_idx in range(ne):
+                f_e, P_e = self._compute_psd(e[:, e_idx])
+                f_e_hat, P_e_hat = self._compute_psd(e_hat[:, e_idx])
+                psd_rmse[e_idx] += np.mean((P_e - P_e_hat) ** 2)
+        return np.sqrt(1 / M * psd_rmse)
+
+    def _compute_psd(self, signal: NDArray[np.float64]) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
+        from scipy.signal import welch
+
+        fs = 1.0  # Sampling frequency is 1 Hz (arbitrary units)
+        f, Pxx = welch(signal, fs=fs, nperseg=min(256, len(signal)))
+        return f, Pxx
+    
+class EnergyMse(Metrics):
+    def __init__(self, config: MetricConfig):
+        pass
+
+    def forward(
+        self, es: List[NDArray[np.float64]], e_hats: List[NDArray[np.float64]]
+    ) -> np.float64:
+        M = len(es)
+        ne = es[0].shape[1]
+        energy_mse = np.zeros((ne))
+        for e, e_hat in zip(es, e_hats):
+            for e_idx in range(ne):
+                energy_mse[e_idx] += (np.sum(e[:, e_idx] ** 2) - np.sum(e_hat[:, e_idx] ** 2)) ** 2
+        return energy_mse / M
 
 
 def retrieve_metric_class(metric_class_string: str) -> Type[Metrics]:

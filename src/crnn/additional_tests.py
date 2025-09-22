@@ -102,6 +102,55 @@ class StabilityOfInitialState(AdditionalTest):
             ],
             {},
         )
+    
+class LipschitzConstant(AdditionalTest):
+    def test(
+        self,
+        x0: Optional[
+            Union[Tuple[torch.Tensor], Tuple[torch.Tensor, torch.Tensor]]
+        ] = None,
+    ) -> AdditionalTestResult:
+        d_a = self.scale * torch.randn(self.B, self.horizon, self.nd)
+        d_b = torch.normal(mean=0.0, std=0.01, size=(self.B, self.horizon, self.nd))
+        d_b.requires_grad = True
+        L_max, inc_e_hat_max, inc_d_max = (
+            torch.tensor(0.0),
+            torch.zeros((self.horizon, self.ne)),
+            torch.zeros((self.horizon, self.nd)),
+        )
+        opt = torch.optim.Adam([d_b], lr=self.lr, maximize=True)
+        for epoch in range(self.epochs):
+            opt.zero_grad()
+            e_hat_a, _ = self.model.forward(d_a, x0)
+            e_hat_b, _ = self.model.forward(d_b, x0)
+            L = get_sequence_norm(e_hat_a-e_hat_b) / get_sequence_norm(d_a-d_b)
+            L.backward(retain_graph=True)
+            opt.step()
+
+            if L > L_max:
+                L_max, inc_e_hat_max, inc_d_max = (
+                    L.clone().detach(),
+                    (e_hat_a-e_hat_b).clone().detach(),
+                    (d_a-d_b).clone().detach(),
+                )
+            if epoch % 100 == 0:
+                self.tracker.track(
+                    ev.Log(
+                        "",
+                        f"{epoch}/{self.epochs}: L: {np.sqrt(L.cpu().detach().numpy()):.2f}, norm e_hat: {torch.linalg.norm(e_hat_a-e_hat_b).cpu().detach().numpy():.2f}, norm d: {torch.linalg.norm(d_a-d_b).cpu().detach().numpy():.2f}",
+                    )
+                )
+
+        return AdditionalTestResult(
+            np.sqrt(L_max.cpu().detach().numpy()),
+            [
+                InputOutput(
+                    d=inc_d_max.cpu().detach().numpy(),
+                    e_hat=inc_e_hat_max.cpu().detach().numpy(),
+                )
+            ],
+            {},
+        )
 
 
 class InputOutputStabilityL2(AdditionalTest):

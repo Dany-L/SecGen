@@ -11,13 +11,14 @@ from torch.optim import Optimizer, lr_scheduler
 from torch.utils.data import DataLoader
 
 from ..configuration.experiment import BaseExperimentConfig, load_configuration
-from ..configuration.base import PreprocessingResults, Normalization
+from ..configuration.base import PreprocessingResults, Normalization, PREPARED_FOLDER_NAME, TRAIN_FOLDER_NAME, VALIDATION_FOLDER_NAME, IN_DISTRIBUTION_FOLDER_NAME, OUT_OF_DISTRIBUTION_FOLDER_NAME, SystemIdentificationResults
 from ..io.data import (
     get_result_directory_name,
     load_data,
     load_initialization,
     load_normalization,
     check_data_availability,
+    load_preprocessing_results,
 )
 from ..datasets import get_datasets, get_loaders
 from ..loss import get_loss_function
@@ -32,49 +33,6 @@ from ..utils import base as utils
 from ..systemtheory.analysis import get_transient_time
 
 PLOT_AFTER_EPOCHS: int = 100
-
-
-def load_preprocessing_results(
-    result_directory: str, experiment_config: BaseExperimentConfig, dataset_dir: str
-) -> Optional[PreprocessingResults]:
-    """
-    Load preprocessing results from saved files or return None if not available.
-
-    Args:
-        result_directory: Directory where preprocessing results are saved
-        experiment_config: Experiment configuration
-        dataset_dir: Dataset directory
-
-    Returns:
-        PreprocessingResults or None: Preprocessing results if available, None otherwise
-    """
-    init_data = load_initialization(result_directory)
-    normalization: Optional[Normalization] = None
-
-    try:
-        normalization = load_normalization(result_directory)
-    except (FileNotFoundError, OSError):
-        # Normalization data not found
-        pass
-
-    if init_data.data and normalization:
-        # Calculate horizon and window from existing data
-        transient_time = init_data.data["transient_time"]
-        horizon = transient_time
-        window = int(0.1 * horizon)
-
-        from ..configuration.base import SystemIdentificationResults
-
-        return PreprocessingResults(
-            system_identification=SystemIdentificationResults(
-                ss=init_data.data["ss"], transient_time=transient_time
-            ),
-            horizon=horizon,
-            window=window,
-            normalization=normalization,
-        )
-
-    return None
 
 
 class InitPred(ABC):
@@ -191,13 +149,14 @@ def train(
         )
     )
     tracker.track(ev.TrackParameter("", "transient_time", transient_time))
+    processed_directory = os.path.join(dataset_dir, PREPARED_FOLDER_NAME)
 
     # Load and normalize data
     train_inputs, train_outputs = load_data(
         experiment_config.input_names,
         experiment_config.output_names,
-        "train",
-        dataset_dir,
+        TRAIN_FOLDER_NAME,
+        processed_directory,
     )
     tracker.track(
         ev.Log(
@@ -209,8 +168,8 @@ def train(
     val_inputs, val_outputs = load_data(
         experiment_config.input_names,
         experiment_config.output_names,
-        "validation",
-        dataset_dir,
+        VALIDATION_FOLDER_NAME,
+        processed_directory,
     )
     tracker.track(
         ev.Log(

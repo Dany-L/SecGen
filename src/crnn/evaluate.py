@@ -11,9 +11,9 @@ from .additional_tests import (
     AdditionalTestResult,
     retrieve_additional_test_class,
 )
-from .configuration.base import InputOutput, Normalization
+from .configuration.base import InputOutput, Normalization, PREPARED_FOLDER_NAME, IN_DISTRIBUTION_FOLDER_NAME, OUT_OF_DISTRIBUTION_FOLDER_NAME
 from .configuration.experiment import load_configuration
-from .io.data import get_result_directory_name, load_data, load_normalization
+from .io.data import get_result_directory_name, load_data, load_normalization, load_preprocessing_results
 from .datasets import RecurrentWindowHorizonDataset
 from .metrics import retrieve_metric_class
 from .models import base
@@ -32,7 +32,6 @@ def evaluate(
     model_name: str,
     experiment_name: str,
 ) -> None:
-    mode = "test"
 
     result_directory = get_result_directory_name(
         result_base_directory, model_name, experiment_name
@@ -53,57 +52,65 @@ def evaluate(
     tracker = AggregatedTracker(trackers)
     tracker.track(ev.LoadTrackingConfiguration("", result_directory, model_name))
 
-    test_inputs, test_outputs = load_data(
-        experiment_config.input_names, experiment_config.output_names, mode, dataset_dir
-    )
-    normalization = load_normalization(result_directory)
-    n_test_inputs = utils.normalize(
-        test_inputs, normalization.input.mean, normalization.input.std
+    prepared_directory = os.path.join(dataset_dir, PREPARED_FOLDER_NAME)
+    preprocessing_results = load_preprocessing_results(
+        result_directory, experiment_config, dataset_dir
     )
 
-    test_dataset = RecurrentWindowHorizonDataset(
-        n_test_inputs,
-        test_outputs,
-        experiment_config.horizons.testing,
-        experiment_config.window,
-    )
+    for test_data_type in [IN_DISTRIBUTION_FOLDER_NAME, OUT_OF_DISTRIBUTION_FOLDER_NAME]:
 
-    initializer, predictor = get_model_from_config(model_config)
-    initializer, predictor = load_model(
-        experiment_config, initializer, predictor, model_name, result_directory
-    )
-
-    metrics = dict()
-    for name, metric_config in metrics_config.items():
-        metric_class = retrieve_metric_class(metric_config.metric_class)
-        metrics[name] = metric_class(metric_config.parameters)
-
-    additional_tests = dict()
-    for name, additional_test_config in additional_tests_config.items():
-        additional_test_class = retrieve_additional_test_class(
-            additional_test_config.test_class
+        tracker.track(ev.Log("", f"Evaluating on {test_data_type} data"))
+        test_inputs, test_outputs = load_data(
+            experiment_config.input_names, experiment_config.output_names, test_data_type, prepared_directory
         )
-        additional_tests[name] = additional_test_class(
-            additional_test_config.parameters, predictor, tracker
+        normalization = load_normalization(result_directory)
+        n_test_inputs = utils.normalize(
+            test_inputs, normalization.input.mean, normalization.input.std
         )
 
-    start_time = time.time()
-    evaluate_model(
-        (initializer, predictor),
-        test_dataset,
-        metrics,
-        normalization,
-        mode,
-        additional_tests,
-        dataset_name,
-        experiment_config.dt,
-        tracker,
-    )
-    stop_time = time.time()
-    training_duration = utils.get_duration_str(start_time, stop_time)
-    tracker.track(ev.Log("", f"Evaluation duration: {training_duration}"))
-    tracker.track(ev.TrackMetrics("", {"evaluation_duration": stop_time - start_time}))
-    tracker.track(ev.Stop(""))
+        test_dataset = RecurrentWindowHorizonDataset(
+            n_test_inputs,
+            test_outputs,
+            preprocessing_results.horizon,
+            preprocessing_results.window,
+        )
+
+        initializer, predictor = get_model_from_config(model_config)
+        initializer, predictor = load_model(
+            experiment_config, initializer, predictor, model_name, result_directory
+        )
+
+        metrics = dict()
+        for name, metric_config in metrics_config.items():
+            metric_class = retrieve_metric_class(metric_config.metric_class)
+            metrics[name] = metric_class(metric_config.parameters)
+
+        additional_tests = dict()
+        for name, additional_test_config in additional_tests_config.items():
+            additional_test_class = retrieve_additional_test_class(
+                additional_test_config.test_class
+            )
+            additional_tests[name] = additional_test_class(
+                additional_test_config.parameters, predictor, tracker
+            )
+
+        start_time = time.time()
+        evaluate_model(
+            (initializer, predictor),
+            test_dataset,
+            metrics,
+            normalization,
+            test_data_type,
+            additional_tests,
+            dataset_name,
+            experiment_config.dt,
+            tracker,
+        )
+        stop_time = time.time()
+        training_duration = utils.get_duration_str(start_time, stop_time)
+        tracker.track(ev.Log("", f"Evaluation duration: {training_duration}"))
+        tracker.track(ev.TrackMetrics("", {"evaluation_duration": stop_time - start_time}))
+        tracker.track(ev.Stop(""))
 
 
 def evaluate_model(
@@ -111,7 +118,7 @@ def evaluate_model(
     test_dataset: RecurrentWindowHorizonDataset,
     metrics: Dict[str, metrics.Metrics],
     normalization: Normalization,
-    mode: Literal["test", "validation"],
+    mode: str,
     additional_tests: Dict[str, AdditionalTest],
     dataset_name: str,
     dt: float,

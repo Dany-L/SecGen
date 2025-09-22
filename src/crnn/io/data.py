@@ -3,7 +3,7 @@ import os
 import io
 import tarfile
 import shutil
-from typing import Any, Dict, List, Literal, Tuple, Callable, Union
+from typing import Any, Dict, List, Literal, Tuple, Callable, Union, Optional
 
 import numpy as np
 import pandas as pd
@@ -14,10 +14,11 @@ from sklearn.model_selection import train_test_split
 from ..tracker import events as ev
 from ..tracker.base import get_aggregated_tracker
 
-from crnn.configuration.experiment import SplitConfig
+from crnn.configuration.experiment import SplitConfig, BaseExperimentConfig
 
 from ..configuration.base import (
     AVAILABLE_DATASETS,
+    PREPARED_FOLDER_NAME,
     INITIALIZATION_FILENAME,
     NORMALIZATION_FILENAME,
     TRAIN_FOLDER_NAME,
@@ -32,6 +33,8 @@ from ..configuration.base import (
     Normalization,
     NormalizationParameters,
     InputOutputList,
+    PreprocessingResults,
+    SystemIdentificationResults
 )
 from ..models import base as base
 
@@ -290,8 +293,8 @@ def check_data_availability(dataset_dir: str) -> Dict[str, bool]:
         Dict with availability status for each data type
     """
     availability = {}
-    for data_type in ["train", "validation", "test"]:
-        type_path = os.path.join(dataset_dir, data_type)
+    for data_type in [TRAIN_FOLDER_NAME, VALIDATION_FOLDER_NAME, IN_DISTRIBUTION_FOLDER_NAME, OUT_OF_DISTRIBUTION_FOLDER_NAME]:
+        type_path = os.path.join(dataset_dir, PREPARED_FOLDER_NAME, data_type)
         availability[data_type] = (
             os.path.exists(type_path)
             and bool([f for f in os.listdir(type_path) if f.endswith(".csv")])
@@ -344,14 +347,6 @@ def download_and_prepare_data(dataset_dir: str, dt: float) -> bool:
     Returns:
         bool: True if data was downloaded/prepared, False if already exists
     """
-    # Check if we already have the data
-    train_path = os.path.join(dataset_dir, TRAIN_FOLDER_NAME)
-    validation_path = os.path.join(dataset_dir, VALIDATION_FOLDER_NAME)
-    test_path = os.path.join(dataset_dir, TEST_FOLDER_NAME)
-
-    if all(os.path.exists(path) for path in [train_path, validation_path, test_path]):
-        return False  # Data already exists
-
     # Extract dataset name from path structure
     dataset_name = os.path.basename(os.path.dirname(dataset_dir))
 
@@ -1104,3 +1099,43 @@ def save_trajectories_to_csv(
     print(
         f"✅ Saved {num_trajectories} combined input/output trajectory files to '{output_dir}'"
     )
+
+def load_preprocessing_results(
+    result_directory: str, experiment_config: BaseExperimentConfig, dataset_dir: str
+) -> Optional[PreprocessingResults]:
+    """
+    Load preprocessing results from saved files or return None if not available.
+
+    Args:
+        result_directory: Directory where preprocessing results are saved
+        experiment_config: Experiment configuration
+        dataset_dir: Dataset directory
+
+    Returns:
+        PreprocessingResults or None: Preprocessing results if available, None otherwise
+    """
+    init_data = load_initialization(result_directory)
+    normalization: Optional[Normalization] = None
+
+    try:
+        normalization = load_normalization(result_directory)
+    except (FileNotFoundError, OSError):
+        # Normalization data not found
+        pass
+
+    if init_data.data and normalization:
+        # Calculate horizon and window from existing data
+        transient_time = init_data.data["transient_time"]
+        horizon = transient_time
+        window = int(0.1 * horizon)
+
+        return PreprocessingResults(
+            system_identification=SystemIdentificationResults(
+                ss=init_data.data["ss"], transient_time=transient_time
+            ),
+            horizon=horizon,
+            window=window,
+            normalization=normalization,
+        )
+
+    return None
