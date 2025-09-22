@@ -66,6 +66,7 @@ class TestSplitConfig(BaseModel):
     id: float
     ood: float
 
+
 class SplitConfig(BaseModel):
     val: float
     test: TestSplitConfig

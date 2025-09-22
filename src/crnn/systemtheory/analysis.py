@@ -23,34 +23,42 @@ def get_transient_time(ss: models_base.Linear, n_max=5000, plot=False) -> np.flo
             ),
             n=n,
         )
-        for idx, y_i in enumerate(y):
-            e = np.abs(y_i.T - steady_state[:, idx : idx + 1])
-            e_max = np.max(e, axis=1).reshape(-1, 1)
-            transient_time = np.argmax(e < e_max * SETTLING_TIME_THRESHOLD, axis=1)
-            if plot:
-                for idx, _ in enumerate(e_max):
-                    fig, ax = plt.subplots(figsize=(10, 4))
-                    ax.plot(t, y_i[:, idx], label=f"Output {idx + 1}")
-                    ax.plot(t, e[idx, :], label="|y - y_ss|")
-                ax.plot(
-                    t,
-                    e_max[idx] * SETTLING_TIME_THRESHOLD * np.ones_like(t),
-                    label="e_max * 0.02",
-                    linestyle="--",
-                )
-                ax.scatter(
-                    transient_time[idx] * ss.dt,
-                    e[idx, transient_time[idx]],
-                    color="red",
-                    label=f"Transient Time {transient_time[idx]}",
-                )
-                ax.set_xlabel("Time")
-                ax.set_ylabel("Output")
-                ax.legend()
-                ax.grid()
-                plt.savefig(f"step_{n}.png")
+        transient_times = []
+        for n_u in range(len(y)):
+            # iterate over inputs
+            ss_i = steady_state[:, n_u : n_u + 1]
+            for n_y in range(y[0].shape[1]):
+                # iterate over outputs
+                y_i = y[n_u][:, n_y]
+                e_i = np.abs(y_i - ss_i[n_y])
+                e_max = np.max(e_i)
+                band = SETTLING_TIME_THRESHOLD * e_max
+                lower, upper = ss_i[n_y] - band, ss_i[n_y] + band
+                inside = (y_i >= lower) & (y_i <= upper)  # boolean mask
+                for k in range(len(y_i)):
+                    if inside[k] and inside[k:].all():  # enters and stays
+                        transient_time = k
+                    else:
+                        transient_time = -1
+                transient_times.append(transient_time)
 
-        return np.argmax(e < e_max * SETTLING_TIME_THRESHOLD, axis=1), e, e_max
+                if plot:
+                    fig, ax = plt.subplots(figsize=(10, 4))
+                    ax.plot(t, y_i, label=f"Output {n_y + 1}")
+                    ax.plot(t, e_i, label="|y - y_ss|")
+                    ax.plot(
+                        t,
+                        e_max * SETTLING_TIME_THRESHOLD * np.ones_like(t),
+                        label="e_max * 0.02",
+                        linestyle="--",
+                    )
+                    ax.set_xlabel("Time")
+                    ax.set_ylabel("Output")
+                    ax.legend()
+                    ax.grid()
+                    plt.savefig(f"step_{n}_output_{n_y + 1}.png")
+
+        return np.max(transient_times)
 
     if not ss.is_stable():
         raise ValueError("The system is not stable, transient time cannot be computed.")
@@ -59,10 +67,10 @@ def get_transient_time(ss: models_base.Linear, n_max=5000, plot=False) -> np.flo
     if n_max < 100:
         raise ValueError("n_max should be at least 100 for transient time calculation.")
     n = 100
-    transient_time, e, e_max = get_transient_from_step_response(n, plot=plot)
-    while np.all(e > e_max * SETTLING_TIME_THRESHOLD) and n < n_max:
+    transient_time = get_transient_from_step_response(n, plot=plot)
+    while transient_time < 0 and n < n_max:
         n += 100
-        transient_time, e, e_max = get_transient_from_step_response(n, plot=plot)
+        transient_time = get_transient_from_step_response(n, plot=plot)
 
     if n >= n_max:
         transient_time = 100  # default value if transient time cannot be determined

@@ -12,9 +12,9 @@ FIG_FOLDER_NAME = "fig"
 SEQ_FOLDER_NAME = "seq"
 NORMALIZATION_FILENAME = "normalization"
 INITIALIZATION_FILENAME = "initialization"
-PREPARED_FOLDER_NAME = "prepared" # after ood separation
-PROCESSED_FOLDER_NAME = "processed" # split into train/val/test as csv
-RAW_FOLDER_NAME = "raw" # data as downloaded
+PREPARED_FOLDER_NAME = "prepared"  # after ood separation
+PROCESSED_FOLDER_NAME = "processed"  # split into train/val/test as csv
+RAW_FOLDER_NAME = "raw"  # data as downloaded
 IN_DISTRIBUTION_FOLDER_NAME = "id-test"
 OUT_OF_DISTRIBUTION_FOLDER_NAME = "ood-test"
 TRAIN_FOLDER_NAME = "train"
@@ -22,32 +22,33 @@ VALIDATION_FOLDER_NAME = "validation"
 TEST_FOLDER_NAME = "test"
 
 SHIP_DOWNLOAD_URL = {
-    'darus': {
-        'base_url': "https://darus.uni-stuttgart.de/",
-        'doi': 'doi:10.18419/darus-2905'
+    "darus": {
+        "base_url": "https://darus.uni-stuttgart.de/",
+        "doi": "doi:10.18419/darus-2905",
     }
 }
 MSD_DOWNLOAD_URL = {
-    'darus':{
-        'base_url': "https://darus.uni-stuttgart.de/",
-        'doi': 'doi:10.18419/DARUS-4768'
+    "darus": {
+        "base_url": "https://darus.uni-stuttgart.de/",
+        "doi": "doi:10.18419/DARUS-4768",
     }
 }
 HYST_DOWNLOAD_URL = {
-    'test':{
-        'url':"https://data.4tu.nl/file/7060f9bc-8289-411e-8d32-57bef2740d32/cd40469c-5064-4968-ae59-88cbb850264b", 
-        'file_type': 'zip',
-        }, 
-    'train': {
-        'url':'https://figshare.com/ndownloader/files/58117315',
-        'file_type': 'mat'
-        }
-    }
+    "test": {
+        "url": "https://data.4tu.nl/file/7060f9bc-8289-411e-8d32-57bef2740d32/cd40469c-5064-4968-ae59-88cbb850264b",
+        "file_type": "zip",
+    },
+    "train": {
+        "url": "https://figshare.com/ndownloader/files/58117315",
+        "file_type": "mat",
+    },
+}
 AVAILABLE_DATASETS = {
     "ship": SHIP_DOWNLOAD_URL,
     "msd": MSD_DOWNLOAD_URL,
-    "hyst": HYST_DOWNLOAD_URL
+    "hyst": HYST_DOWNLOAD_URL,
 }
+
 
 @dataclass
 class NormalizationParameters:
@@ -87,6 +88,7 @@ class Normalization:
 @dataclass
 class SystemIdentificationResults:
     """Results from N4SID system identification."""
+
     ss: Any  # State space model (scipy object)
     transient_time: int
     fit: Optional[float] = None
@@ -97,6 +99,7 @@ class SystemIdentificationResults:
 @dataclass
 class PreprocessingResults:
     """Complete preprocessing results containing all calculated parameters."""
+
     system_identification: SystemIdentificationResults
     horizon: int
     window: int

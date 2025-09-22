@@ -35,48 +35,45 @@ PLOT_AFTER_EPOCHS: int = 100
 
 
 def load_preprocessing_results(
-    result_directory: str, 
-    experiment_config: BaseExperimentConfig, 
-    dataset_dir: str
+    result_directory: str, experiment_config: BaseExperimentConfig, dataset_dir: str
 ) -> Optional[PreprocessingResults]:
     """
     Load preprocessing results from saved files or return None if not available.
-    
+
     Args:
         result_directory: Directory where preprocessing results are saved
         experiment_config: Experiment configuration
         dataset_dir: Dataset directory
-        
+
     Returns:
         PreprocessingResults or None: Preprocessing results if available, None otherwise
     """
     init_data = load_initialization(result_directory)
     normalization: Optional[Normalization] = None
-    
+
     try:
         normalization = load_normalization(result_directory)
     except (FileNotFoundError, OSError):
         # Normalization data not found
         pass
-    
+
     if init_data.data and normalization:
         # Calculate horizon and window from existing data
         transient_time = init_data.data["transient_time"]
         horizon = transient_time
         window = int(0.1 * horizon)
-        
+
         from ..configuration.base import SystemIdentificationResults
-        
+
         return PreprocessingResults(
             system_identification=SystemIdentificationResults(
-                ss=init_data.data["ss"],
-                transient_time=transient_time
+                ss=init_data.data["ss"], transient_time=transient_time
             ),
             horizon=horizon,
             window=window,
-            normalization=normalization
+            normalization=normalization,
         )
-    
+
     return None
 
 
@@ -148,19 +145,27 @@ def train(
     )
 
     # Check if preprocessing results are available
-    preprocessing_results = load_preprocessing_results(result_directory, experiment_config, dataset_dir)
-    
+    preprocessing_results = load_preprocessing_results(
+        result_directory, experiment_config, dataset_dir
+    )
+
     if preprocessing_results is None:
-        tracker.track(ev.Log("", "No preprocessing results found. Please run preprocessing.py first."))
+        tracker.track(
+            ev.Log(
+                "", "No preprocessing results found. Please run preprocessing.py first."
+            )
+        )
         raise RuntimeError(
             f"Preprocessing results not found in {result_directory}. "
             "Please run scripts/preprocessing.py before training."
         )
-    
+
     # Check data availability
     data_availability = check_data_availability(dataset_dir)
-    missing_data = [data_type for data_type, available in data_availability.items() if not available]
-    
+    missing_data = [
+        data_type for data_type, available in data_availability.items() if not available
+    ]
+
     if missing_data:
         dataset_name = os.path.basename(os.path.dirname(os.path.dirname(dataset_dir)))
         tracker.track(ev.Log("", f"Missing data types: {missing_data}"))
@@ -168,21 +173,25 @@ def train(
             f"Missing data in {dataset_dir}: {missing_data}. "
             f"Please run scripts/prepare_data.py {dataset_name} {dataset_dir} first."
         )
-    
+
     # Extract preprocessing results
     ss = preprocessing_results.system_identification.ss
     transient_time = preprocessing_results.system_identification.transient_time
     horizon = preprocessing_results.horizon
     window = preprocessing_results.window
-    
+
     input_mean = preprocessing_results.normalization.input.mean
     input_std = preprocessing_results.normalization.input.std
     output_mean = preprocessing_results.normalization.output.mean
     output_std = preprocessing_results.normalization.output.std
-    
-    tracker.track(ev.Log("", f"Using preprocessing results - window: {window}, horizon: {horizon}"))
+
+    tracker.track(
+        ev.Log(
+            "", f"Using preprocessing results - window: {window}, horizon: {horizon}"
+        )
+    )
     tracker.track(ev.TrackParameter("", "transient_time", transient_time))
-    
+
     # Load and normalize data
     train_inputs, train_outputs = load_data(
         experiment_config.input_names,
@@ -196,7 +205,7 @@ def train(
             f"Training samples: {np.sum([train_input.shape[0] for train_input in train_inputs])}",
         )
     )
-    
+
     val_inputs, val_outputs = load_data(
         experiment_config.input_names,
         experiment_config.output_names,
@@ -209,13 +218,13 @@ def train(
             f"Validation samples: {np.sum([val_input.shape[0] for val_input in val_inputs])}",
         )
     )
-    
+
     # Normalize data using preprocessing parameters
     n_train_inputs = utils.normalize(train_inputs, input_mean, input_std)
     n_train_outputs = utils.normalize(train_outputs, output_mean, output_std)
     n_val_inputs = utils.normalize(val_inputs, input_mean, input_std)
     n_val_outputs = utils.normalize(val_outputs, output_mean, output_std)
-    
+
     # Create init_data for model initialization
     init_data = load_initialization(result_directory)
 

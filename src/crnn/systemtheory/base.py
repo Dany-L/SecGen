@@ -228,7 +228,9 @@ class AnalysisLti:
                     np.eye(self.nw), np.eye(self.nx), np.array([[1.0]])
                 ),
             )
-        print(f"norm L {np.linalg.norm(L.value, 2)}, norm X {np.linalg.norm(X.value, 2)}")
+        print(
+            f"norm L {np.linalg.norm(L.value, 2)}, norm X {np.linalg.norm(X.value, 2)}"
+        )
 
         # assert self.sanity_check(X.value, ga2.value, L.value, uncertainty)
         assert self._sanity_check(
