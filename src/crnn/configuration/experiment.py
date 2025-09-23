@@ -93,12 +93,12 @@ class BaseExperimentConfig(BaseModel):
     dt: float
     nz: int
     batch_size: int
-    window: int
     loss_function: Literal["mse"]
     input_names: List[str]
     output_names: List[str]
-    horizons: HorizonsConfig
     initial_hidden_state: Literal["zero", "joint", "separate"]
+    window: int = 10
+    horizons: HorizonsConfig = HorizonsConfig(training=100, validation=100, testing=100)
     t: float = 1.0
     increase_rate: float = 10.0
     increase_after_epochs: int = 100

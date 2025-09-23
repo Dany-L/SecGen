@@ -44,7 +44,7 @@ def evaluate(
     metrics_config = config.metrics
     additional_tests_config = config.additional_tests
 
-    dataset_name = os.path.basename(os.path.dirname(os.path.dirname(dataset_dir)))
+    dataset_name = os.path.basename(os.path.dirname(dataset_dir))
 
     trackers = get_trackers_from_config(
         trackers_config, result_directory, model_name, "validation"

@@ -195,6 +195,8 @@ def perform_data_splitting(
     window: int,
     horizon: int,
     dataset_dir: str,
+    input_names: List[str],
+    output_names: List[str],
     split_config: Optional[Dict[str, Any]] = None,
 ) -> None:
     """
@@ -294,11 +296,11 @@ def perform_data_splitting(
             save_to_csv(high_energy, ood_folder, f"high_energy_{split}")
     else:
         ood_test_data = split_into_subsequences(ood_test_data, window + horizon + 1)
-        save_to_csv(ood_test_data, ood_folder, "ood_test")
+        save_to_csv(ood_test_data, ood_folder, "ood_test", input_names, output_names)
 
-    save_to_csv(test_data, id_folder, "test")
-    save_to_csv(val_data, val_folder, "validation")
-    save_to_csv(train_data, train_folder, "train")
+    save_to_csv(test_data, id_folder, "test", input_names, output_names)
+    save_to_csv(val_data, val_folder, "validation", input_names, output_names)
+    save_to_csv(train_data, train_folder, "train", input_names, output_names)
 
 
 def preprocess(
@@ -327,35 +329,11 @@ def preprocess(
         result_base_directory, model_name, experiment_name
     )
 
-    # Check if preprocessing already completed
-    if check_preprocessing_completed(result_directory):
-        # Use tracker for logging
-        dummy_tracker = AggregatedTracker([])
-        dummy_tracker.track(
-            ev.Log("", f"Preprocessing already completed for {result_directory}")
-        )
-        dummy_tracker.track(ev.Log("", "Loading existing preprocessing results..."))
-        # Load existing results
-        config = load_configuration(config_file_name)
-        experiment_config = config.experiments[experiment_name]
-        existing_results = load_preprocessing_results(
-            result_directory, experiment_config, dataset_dir
-        )
-        if existing_results is not None:
-            return existing_results
-        else:
-            dummy_tracker.track(
-                ev.Log(
-                    "",
-                    "Warning: Preprocessing files exist but couldn't be loaded. Rerunning preprocessing...",
-                )
-            )
-
     config = load_configuration(config_file_name)
     experiment_config = config.experiments[experiment_name]
     full_model_name = f"{experiment_name}-{model_name}"
     trackers_config = config.trackers
-    dataset_name = os.path.dirname(os.path.dirname(dataset_dir))
+    dataset_name = os.path.basename(os.path.dirname(dataset_dir))
 
     if experiment_config.debug:
         import torch
@@ -477,7 +455,7 @@ def preprocess(
             )
         )
         perform_data_splitting(
-            train_data, val_data, test_data, ood_test_data, window, horizon, dataset_dir
+            train_data, val_data, test_data, ood_test_data, window, horizon, dataset_dir, experiment_config.input_names, experiment_config.output_names, 
         )
     else:
         tracker.track(

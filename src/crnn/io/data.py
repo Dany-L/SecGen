@@ -305,38 +305,6 @@ def check_data_availability(dataset_dir: str) -> Dict[str, bool]:
     return availability
 
 
-def get_dataset_info(dataset_dir: str) -> Dict[str, Any]:
-    """
-    Get information about a prepared dataset.
-
-    Args:
-        dataset_dir: Path to the dataset directory
-
-    Returns:
-        Dict containing dataset information
-    """
-    availability = check_data_availability(dataset_dir)
-    dataset_name = os.path.basename(os.path.dirname(os.path.dirname(dataset_dir)))
-
-    info = {
-        "dataset_name": dataset_name,
-        "dataset_dir": dataset_dir,
-        "availability": availability,
-        "files": {},
-    }
-
-    # Count files in each directory
-    for data_type in ["train", "validation", "test"]:
-        type_path = os.path.join(dataset_dir, data_type)
-        if os.path.exists(type_path):
-            csv_files = [f for f in os.listdir(type_path) if f.endswith(".csv")]
-            info["files"][data_type] = len(csv_files)
-        else:
-            info["files"][data_type] = 0
-
-    return info
-
-
 def download_and_prepare_data(dataset_dir: str, dt: float) -> bool:
     """
     Download and prepare dataset if it doesn't exist locally.
@@ -578,7 +546,7 @@ def prepare_hyst(dataset_dir: str, dataset_name: str) -> None:
     print(f"✅ Prepared HYST dataset with 1 train and 1 test sequence")
 
 
-def save_to_csv(data: InputOutputList, folder_name: str, file_path: str):
+def save_to_csv(data: InputOutputList, folder_name: str, file_path: str, input_names: List[str]=[], output_names: List[str]=[]) -> None:
     """
     Save InputOutputList data to a CSV file.
 
@@ -587,8 +555,13 @@ def save_to_csv(data: InputOutputList, folder_name: str, file_path: str):
         file_path: Path to the CSV file
     """
     for idx, (input, output) in enumerate(zip(data.d, data.e)):
-        input_columns = [f"u_{i+1}" for i in range(input.shape[1])]
-        output_columns = [f"y_{i+1}" for i in range(output.shape[1])]
+        if input_names and output_names:
+            input_columns = input_names
+            output_columns = output_names
+
+        else:
+            input_columns = [f"u_{i+1}" for i in range(input.shape[1])]
+            output_columns = [f"y_{i+1}" for i in range(output.shape[1])]
         columns = input_columns + output_columns
 
         flattened_data = np.hstack([input, output])
@@ -729,7 +702,7 @@ def load_data(
 
     if not os.path.exists(type_path):
         # Check if this is a nonlinear_benchmarks dataset that needs preparation
-        dataset_name = os.path.basename(os.path.dirname(os.path.dirname(dataset_dir)))
+        dataset_name = os.path.basename(os.path.dirname(dataset_dir))
 
         if hasattr(nonlinear_benchmarks, dataset_name):
             raise ValueError(
