@@ -1,5 +1,5 @@
 from abc import abstractmethod
-from typing import List, Type
+from typing import List, Type, Tuple
 
 import numpy as np
 from numpy.typing import NDArray
@@ -87,7 +87,7 @@ class PsdRmse(Metrics):
                 psd_rmse[e_idx] += np.mean((P_e - P_e_hat) ** 2)
         return np.sqrt(1 / M * psd_rmse)
 
-    def _compute_psd(self, signal: NDArray[np.float64]) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
+    def _compute_psd(self, signal: NDArray[np.float64]) -> Tuple[NDArray[np.float64], NDArray[np.float64]]:
         from scipy.signal import welch
 
         fs = 1.0  # Sampling frequency is 1 Hz (arbitrary units)

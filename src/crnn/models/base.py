@@ -165,7 +165,7 @@ class Linear(nn.Module):
         x = torch.zeros(size=(n_batch, N + 1, self._nx, 1))
         y = torch.zeros(size=(n_batch, N, self._ny, 1))
         if x0 is not None:
-            if isinstance(x0, tuple):
+            if isinstance(x0, Tuple):
                 x[:, 0, :, :] = x0[0]  # Use first element if tuple
             else:
                 x[:, 0, :, :] = x0
@@ -673,7 +673,7 @@ def N4SID_NG_with_nfoursid(
     NumRows: Optional[int] = None,
     NumCols: Optional[int] = None,
     enforce_stability_method: str = "projection",
-) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """
     Estimate discrete-time state-space model using the NFourSID package.
 
