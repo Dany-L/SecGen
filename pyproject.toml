@@ -20,7 +20,8 @@ dependencies = [
     "matplotlib",
     "mosek",
     "mlflow",
-    "nonlinear-benchmarks"
+    "nonlinear-benchmarks",
+    "ssm @ git+https://github.com/Dany-L/SSM-sysid.git"
 ]
 [project.optional-dependencies]
 test = [
