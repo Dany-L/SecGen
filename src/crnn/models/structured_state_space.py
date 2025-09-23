@@ -18,6 +18,7 @@ class BasicS4(base.DynamicIdentificationModel):
         self,
         config: BasicS4Config,
     ) -> None:
+        # based on https://doi.org/10.1016/j.ifacol.2024.08.536
         super().__init__(config)
         from ssm.StackedSSM import StackedSSMModel
         from ssm.layer import LRU, S4, S5
@@ -52,6 +53,6 @@ class BasicS4(base.DynamicIdentificationModel):
             x0 = torch.zeros(size=(B, self.nz))
         else:
             x0 = x0[0].squeeze(0)
-        e_hat = self.s4(d)
+        e_hat, x = self.s4(d)
         # e_hat, h = self.s4(d, x0)
-        return (e_hat, (None,None))
+        return (e_hat, (x,))
