@@ -46,14 +46,13 @@ class Nrmse(Metrics):
         self, es: List[NDArray[np.float64]], e_hats: List[NDArray[np.float64]]
     ) -> np.float64:
         M = len(es)
+        std = np.std(np.vstack(es), axis=0)
         h, ne = es[0].shape
         nrmse = np.zeros((ne))
         for e, e_hat in zip(es, e_hats):
             for e_idx in range(ne):
-                nrmse[e_idx] += np.sum((e[:, e_idx] - e_hat[:, e_idx]) ** 2) / np.sum(
-                    (e[:, e_idx] - np.mean(e[:, e_idx])) ** 2
-                )
-        return np.sqrt(1 / M * nrmse)
+                nrmse[e_idx] += 1/h * np.sum((e[:, e_idx] - e_hat[:, e_idx]) ** 2) 
+        return 1/std * np.sqrt(1 / M * nrmse)
     
 class Fit(Metrics):
     def __init__(self, config: MetricConfig):
@@ -64,12 +63,11 @@ class Fit(Metrics):
     ) -> np.float64:
         M = len(es)
         h, ne = es[0].shape
+        mean = np.mean(np.vstack(es), axis=0)
         fit = np.zeros((ne))
         for e, e_hat in zip(es, e_hats):
             for e_idx in range(ne):
-                fit[e_idx] += 1 - np.linalg.norm(e[:, e_idx] - e_hat[:, e_idx]) / np.linalg.norm(
-                    e[:, e_idx] - np.mean(e[:, e_idx])
-                )
+                fit[e_idx] += 1 - np.sum((e[:, e_idx] - e_hat[:, e_idx])**2) / np.sum((e[:, e_idx] - mean[e_idx])**2)
         return 100 * fit / M
     
 class PsdRmse(Metrics):
