@@ -165,6 +165,7 @@ def evaluate_model(
         tracker.track(ev.Log("", f"{name}: {np.mean(e):.2f}"))
         tracker.track(ev.TrackMetrics("", {name: float(np.mean(e))}))
         metrics_result[name] = float(np.mean(e))
+        metrics_result[f'{name}_per_state'] = e.tolist()
     results["num_parameters"] = int(predictor.get_number_of_parameters())
     results["metrics"] = metrics_result
 

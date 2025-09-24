@@ -106,7 +106,7 @@ class EnergyMse(Metrics):
         energy_mse = np.zeros((ne))
         for e, e_hat in zip(es, e_hats):
             for e_idx in range(ne):
-                energy_mse[e_idx] += (np.sum(e[:, e_idx] ** 2) - np.sum(e_hat[:, e_idx] ** 2)) ** 2
+                energy_mse[e_idx] += (np.sum(e[:, e_idx] ** 2) - np.sum(e_hat[:, e_idx] ** 2)/np.sum(e[:, e_idx] ** 2)) ** 2
         return energy_mse / M
 
 
