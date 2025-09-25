@@ -5,6 +5,7 @@ from ..configuration.experiment import BaseExperimentConfig, BaseModelConfig
 from ..utils import base as utils
 from ..models import base as base
 from ..models.recurrent import BasicLstm
+from ..models.switched_linear import ReliNet
 
 
 def get_model_from_config(
@@ -18,7 +19,10 @@ def get_model_from_config(
 
     init_params = model_config.parameters.model_copy()
     init_params.nd = init_params.nd + init_params.ne
-    initializer = model_class(init_params)
+    if model_class is ReliNet:
+        initializer = BasicLstm(init_params)
+    else:
+        initializer = model_class(init_params)
 
     predictor = model_class(model_config.parameters)
 

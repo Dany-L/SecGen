@@ -6,6 +6,7 @@ from torch.utils.data import DataLoader
 
 from ..configuration.experiment import BaseExperimentConfig
 from ..models import base
+from ..models.switched_linear import ReliNet
 from ..tracker import events as ev
 from ..tracker.base import AggregatedTracker
 from ..utils import plot
@@ -44,7 +45,10 @@ class JointInitPredictor(InitPred):
                 predictor.zero_grad()
                 initializer.zero_grad()
                 e_hat_init, h0 = initializer.forward(batch["d_init"])
-                e_hat, _ = predictor.forward(batch["d"], h0)
+                if isinstance(predictor, ReliNet):
+                    e_hat, _ = predictor.forward(batch["d"], batch['e_init'], h0)
+                else:
+                    e_hat, _ = predictor.forward(batch["d"], h0)
                 batch_loss_predictor = loss_function(e_hat, batch["e"])
                 batch_phi = predictor.get_phi(t)
                 batch_loss_initializer = loss_function(
