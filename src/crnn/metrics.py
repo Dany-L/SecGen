@@ -101,13 +101,19 @@ class EnergyMse(Metrics):
     def forward(
         self, es: List[NDArray[np.float64]], e_hats: List[NDArray[np.float64]]
     ) -> np.float64:
+        def E_k(signal: NDArray[np.float64]) -> float:
+            return signal.reshape(-1,1).T @ signal.reshape(-1,1)
         M = len(es)
-        ne = es[0].shape[1]
-        energy_mse = np.zeros((ne))
+        N = es[0].shape[0]
+        Ey, E_hat_y = 0.0, 0.0
+        energy_mse = 0.0
         for e, e_hat in zip(es, e_hats):
-            for e_idx in range(ne):
-                energy_mse[e_idx] += (np.sum(e[:, e_idx] ** 2) - np.sum(e_hat[:, e_idx] ** 2)/np.sum(e[:, e_idx] ** 2)) ** 2
-        return energy_mse / M
+            for k in range(N):
+                Ey += E_k(e[k, :])
+                E_hat_y += E_k(e_hat[k, :]) 
+            energy_mse+=np.abs(Ey-E_hat_y)/Ey
+
+        return np.squeeze(1/M * energy_mse)
 
 
 def retrieve_metric_class(metric_class_string: str) -> Type[Metrics]:
