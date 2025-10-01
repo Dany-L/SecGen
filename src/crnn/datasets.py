@@ -14,6 +14,7 @@ class RecurrentWindowHorizonDataset(Dataset):
         horizon: int,
         window: int,
     ):
+        
         self.N = input_seqs[0].shape[0]
         if self.N < horizon + window + 1:
             self.w = int(self.N*0.1)
@@ -47,6 +48,8 @@ class RecurrentWindowHorizonDataset(Dataset):
         e_seq = list()
 
         for ds, es in zip(d_seqs, e_seqs):
+            if ds.shape[0] < self.N:
+                continue
             n_samples = int(self.N / (self.w + self.h + 1))
 
             d_init = np.zeros((n_samples, self.w, self.nd + self.ne), dtype=np.float64)
