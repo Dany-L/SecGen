@@ -1,3 +1,4 @@
+import os
 from typing import List, Tuple, Union
 
 import cvxpy as cp
@@ -47,6 +48,11 @@ def get_opt_values(
     if isinstance(opt_vars, cp.Expression):
         return opt_vars.value
     return opt_vars
+
+def get_dataset_name(
+    dataset_dir: str,
+) -> str:
+    return os.path.basename(os.path.dirname(dataset_dir))
 
 
 def get_device(gpu: bool) -> torch.device:

@@ -102,7 +102,6 @@ def calculate_system_identification(
 
     transient_time = int(np.max(get_transient_time(ss, plot=False) / dt))
     tracker.track(ev.TrackParameter("", "transient_time", transient_time))
-    tracker.track(ev.SaveInitialization("", ss, {"transient_time": transient_time}))
 
     return SystemIdentificationResults(
         ss=ss,
@@ -131,10 +130,8 @@ def calculate_horizon_and_window(
     Returns:
         Tuple of (horizon, window)
     """
-    max_length = N // 2 - 1  # Ensure window + horizon + 1 is at most half of N
-    horizon = min(
-        max(transient_time, int(min_time / dt)), max_length // int(1 / window_ratio)
-    )
+    max_length = N // 4 - 1  # Ensure window + horizon + 1 is at most a quarter of N
+    horizon = min(max(transient_time, int(min_time / dt)), int(max_length*(1-window_ratio)))
     window = int(window_ratio * horizon)
     return horizon, window
 
@@ -240,6 +237,9 @@ def perform_data_splitting(
     ) -> InputOutputList:
         inputs, outputs = [], []
         for d, e in zip(data.d, data.e):
+            N = d.shape[0]
+            if N < seq_length:
+                return data
             num_subsequences = d.shape[0] // seq_length
             for i in range(num_subsequences):
                 start_idx = i * seq_length
@@ -265,6 +265,8 @@ def perform_data_splitting(
         def separate_high_energy(
             data: InputOutputList, energies: List[float], top_percentage: float
         ) -> Tuple[InputOutputList, InputOutputList]:
+            if len(energies)<2:
+                return (InputOutputList([], []), data)
             threshold = np.percentile(energies, 100 * (1 - top_percentage))
             high_energy_inputs, high_energy_outputs = [], []
             remaining_inputs, remaining_outputs = [], []
@@ -306,9 +308,6 @@ def perform_data_splitting(
 def preprocess(
     config_file_name: str,
     dataset_dir: str,
-    result_base_directory: str,
-    model_name: str,
-    experiment_name: str,
 ) -> PreprocessingResults:
     """
     Main preprocessing function.
@@ -325,33 +324,33 @@ def preprocess(
         PreprocessingResults: Complete preprocessing results
     """
     # Setup directories and configuration
-    result_directory = get_result_directory_name(
-        result_base_directory, model_name, experiment_name
-    )
+
+    dataset_name = utils.get_dataset_name(dataset_dir)
 
     config = load_configuration(config_file_name)
-    experiment_config = config.experiments[experiment_name]
-    full_model_name = f"{experiment_name}-{model_name}"
+    experiment_config = next(
+        config.experiments[key]
+        for key in config.experiments
+        if dataset_name in key
+    )
     trackers_config = config.trackers
-    dataset_name = os.path.basename(os.path.dirname(dataset_dir))
 
     if experiment_config.debug:
         import torch
         import pandas as pd
 
-        torch.manual_seed(42)
+        torch.manual_seed(42)    
+    processed_dataset_dir = os.path.join(dataset_dir, PROCESSED_FOLDER_NAME)
 
     # Setup tracking
     trackers = get_trackers_from_config(
-        trackers_config, result_directory, full_model_name, "preprocessing"
+        trackers_config, dataset_dir, dataset_name, "preprocessing", dataset_dir
     )
     tracker = AggregatedTracker(trackers)
     tracker.track(ev.Start("", dataset_name))
     set_aggregated_tracker(tracker)
 
     # Log configuration parameters
-    tracker.track(ev.TrackParameter("", "model_name", model_name))
-    tracker.track(ev.TrackParameter("", "experiment_name", experiment_name))
     tracker.track(ev.TrackParameter("", "dataset_name", dataset_name))
 
     # Step 0: Ensure data is downloaded and prepared
@@ -365,7 +364,7 @@ def preprocess(
         tracker.track(ev.Log("", f"Dataset '{dataset_name}' already exists"))
 
     # after this step we should have train, validation and test in the processed folder.
-    processed_dataset_dir = os.path.join(dataset_dir, PROCESSED_FOLDER_NAME)
+    
 
     # Load training data
     train_inputs, train_outputs = load_data(
@@ -383,7 +382,7 @@ def preprocess(
     )
 
     # Step 1: System identification and transient time calculation
-    init_data = load_initialization(result_directory)
+    init_data = load_initialization(processed_dataset_dir)
 
     if not init_data.data:
         tracker.track(ev.Log("", "Performing N4SID system identification..."))
@@ -398,17 +397,18 @@ def preprocess(
             "ss": system_id_results.ss,
             "transient_time": system_id_results.transient_time,
         }
+        # Step 2: Calculate horizon and window
+        horizon, window = calculate_horizon_and_window(
+            system_id_results.transient_time, N, init_data.data["ss"].dt
+        )
+        tracker.track(ev.Log("", f"Calculated window: {window}, horizon: {horizon}"))
+        tracker.track(ev.SaveInitialization("", system_id_results.ss, {"transient_time": system_id_results.transient_time, "horizon": horizon, "window": window}))
     else:
         tracker.track(ev.Log("", "Using existing system identification results"))
         system_id_results = SystemIdentificationResults(
             ss=init_data.data["ss"], transient_time=init_data.data["transient_time"]
         )
-
-    # Step 2: Calculate horizon and window
-    horizon, window = calculate_horizon_and_window(
-        system_id_results.transient_time, N, init_data.data["ss"].dt
-    )
-    tracker.track(ev.Log("", f"Calculated window: {window}, horizon: {horizon}"))
+        window, horizon = init_data.data.get("window", 1), init_data.data.get("horizon", 1)
 
     # Step 3: Calculate normalization parameters
     tracker.track(ev.Log("", "Calculating normalization parameters..."))
@@ -438,7 +438,7 @@ def preprocess(
         )
         ood_test_data = InputOutputList(ood_inputs, ood_outputs)
     except ValueError:
-        tracker.track(ev.Log("", "No OOD data found, proceeding without it"))
+        tracker.track(ev.Log("", "No OOD data found"))
         ood_test_data = InputOutputList([], [])
     train_data = InputOutputList(train_inputs, train_outputs)
     val_data = InputOutputList(val_inputs, val_outputs)

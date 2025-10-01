@@ -30,24 +30,15 @@ torch.set_default_dtype(torch.double)
 
 def main() -> None:
     """Command line interface for preprocessing."""
-    parser = argparse.ArgumentParser(description="Run CRNN preprocessing")
-    model_name, experiment_name, gpu = cfg.parse_input(parser)
 
-    result_base_directory = os.path.expanduser(os.getenv(cfg.RESULT_DIR_ENV_VAR))
     dataset_dir = os.path.expanduser(os.getenv(cfg.DATASET_DIR_ENV_VAR))
     config_file_name = os.path.expanduser(os.getenv(cfg.CONFIG_FILE_ENV_VAR))
 
     results = preprocess(
         config_file_name,
-        dataset_dir,
-        result_base_directory,
-        model_name,
-        experiment_name,
+        dataset_dir
     )
     
-    print("Preprocessing completed successfully!")
-    print(f"Transient time: {results.system_identification.transient_time}")
-    print(f"Horizon: {results.horizon}, Window: {results.window}")
     if results.system_identification.fit is not None:
         print(f"N4SID fit: {results.system_identification.fit:.4f}")
 

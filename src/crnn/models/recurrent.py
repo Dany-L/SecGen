@@ -10,7 +10,7 @@ from . import base
 
 class BasicRnnConfig(base.DynamicIdentificationConfig):
     num_layers: int = 5
-    nonlinearity: Literal["tanh", "relu"]
+    nonlinearity: Literal["tanh", "relu"] = "tanh"
 
 
 class BasicRnn(base.DynamicIdentificationModel):

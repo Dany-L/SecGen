@@ -7,6 +7,7 @@ from ..configuration.base import (
     INITIALIZATION_FILENAME,
     NORMALIZATION_FILENAME,
     SEQ_FOLDER_NAME,
+    PROCESSED_FOLDER_NAME
 )
 from ..io.data import (
     save_input_output_to_mat,
@@ -33,7 +34,7 @@ class IoTracker(BaseTracker):
             self.write_to_logfile(event.log_msg)
         elif isinstance(event, ev.SaveNormalization):
             with open(
-                os.path.join(self.directory, f"{NORMALIZATION_FILENAME}.json"),
+                os.path.join(self.dataset_directory, PROCESSED_FOLDER_NAME, f"{NORMALIZATION_FILENAME}.json"),
                 "w",
             ) as f:
                 json.dump(
@@ -58,7 +59,7 @@ class IoTracker(BaseTracker):
             )
             event.data["ss"] = ss
             with open(
-                os.path.join(self.directory, f"{INITIALIZATION_FILENAME}.json"),
+                os.path.join(self.dataset_directory,PROCESSED_FOLDER_NAME, f"{INITIALIZATION_FILENAME}.json"),
                 "w",
             ) as f:
                 json.dump(event.data, f)

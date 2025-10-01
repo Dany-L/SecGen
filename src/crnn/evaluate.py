@@ -11,7 +11,7 @@ from .additional_tests import (
     AdditionalTestResult,
     retrieve_additional_test_class,
 )
-from .configuration.base import InputOutput, Normalization, PREPARED_FOLDER_NAME, IN_DISTRIBUTION_FOLDER_NAME, OUT_OF_DISTRIBUTION_FOLDER_NAME
+from .configuration.base import InputOutput, Normalization, PREPARED_FOLDER_NAME, IN_DISTRIBUTION_FOLDER_NAME, OUT_OF_DISTRIBUTION_FOLDER_NAME, PROCESSED_FOLDER_NAME
 from .configuration.experiment import load_configuration
 from .io.data import get_result_directory_name, load_data, load_normalization, load_preprocessing_results
 from .datasets import RecurrentWindowHorizonDataset
@@ -44,18 +44,20 @@ def evaluate(
     metrics_config = config.metrics
     additional_tests_config = config.additional_tests
 
-    dataset_name = os.path.basename(os.path.dirname(dataset_dir))
+    dataset_name = utils.get_dataset_name(dataset_dir)    
 
     trackers = get_trackers_from_config(
-        trackers_config, result_directory, model_name, "validation"
+        trackers_config, result_directory, model_name, "validation", dataset_dir
     )
     tracker = AggregatedTracker(trackers)
     tracker.track(ev.LoadTrackingConfiguration("", result_directory, model_name))
+    processed_directory = os.path.join(dataset_dir, PROCESSED_FOLDER_NAME)
 
     prepared_directory = os.path.join(dataset_dir, PREPARED_FOLDER_NAME)
     preprocessing_results = load_preprocessing_results(
-        result_directory, experiment_config, dataset_dir
+        processed_directory
     )
+    normalization = preprocessing_results.normalization
 
     for test_data_type in [IN_DISTRIBUTION_FOLDER_NAME, OUT_OF_DISTRIBUTION_FOLDER_NAME]:
 
@@ -63,7 +65,6 @@ def evaluate(
         test_inputs, test_outputs = load_data(
             experiment_config.input_names, experiment_config.output_names, test_data_type, prepared_directory
         )
-        normalization = load_normalization(result_directory)
         n_test_inputs = utils.normalize(
             test_inputs, normalization.input.mean, normalization.input.std
         )

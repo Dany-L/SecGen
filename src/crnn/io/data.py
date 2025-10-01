@@ -13,6 +13,7 @@ from scipy.io import loadmat, savemat
 from sklearn.model_selection import train_test_split
 from ..tracker import events as ev
 from ..tracker.base import get_aggregated_tracker
+from ..utils import base as utils
 
 from crnn.configuration.experiment import SplitConfig, BaseExperimentConfig
 
@@ -316,7 +317,7 @@ def download_and_prepare_data(dataset_dir: str, dt: float) -> bool:
         bool: True if data was downloaded/prepared, False if already exists
     """
     # Extract dataset name from path structure
-    dataset_name = os.path.basename(os.path.dirname(dataset_dir))
+    dataset_name = utils.get_dataset_name(dataset_dir)
 
     if hasattr(nonlinear_benchmarks, dataset_name):
         # Get the dataset class and prepare data
@@ -702,7 +703,7 @@ def load_data(
 
     if not os.path.exists(type_path):
         # Check if this is a nonlinear_benchmarks dataset that needs preparation
-        dataset_name = os.path.basename(os.path.dirname(dataset_dir))
+        dataset_name = utils.get_dataset_name(dataset_dir)
 
         if hasattr(nonlinear_benchmarks, dataset_name):
             raise ValueError(
@@ -944,6 +945,8 @@ def load_initialization(directory: str) -> InitializationData:
                     torch.tensor(initialization["ss"]["dt"]),
                 ),
                 "transient_time": initialization["transient_time"],
+                "window": initialization["window"],
+                "horizon": initialization["horizon"],
             },
         )
     else:
@@ -1074,7 +1077,7 @@ def save_trajectories_to_csv(
     )
 
 def load_preprocessing_results(
-    result_directory: str, experiment_config: BaseExperimentConfig, dataset_dir: str
+    directory: str
 ) -> Optional[PreprocessingResults]:
     """
     Load preprocessing results from saved files or return None if not available.
@@ -1087,27 +1090,23 @@ def load_preprocessing_results(
     Returns:
         PreprocessingResults or None: Preprocessing results if available, None otherwise
     """
-    init_data = load_initialization(result_directory)
+    init_data = load_initialization(directory)
     normalization: Optional[Normalization] = None
 
     try:
-        normalization = load_normalization(result_directory)
+        normalization = load_normalization(directory)
     except (FileNotFoundError, OSError):
         # Normalization data not found
         pass
 
     if init_data.data and normalization:
-        # Calculate horizon and window from existing data
-        transient_time = init_data.data["transient_time"]
-        horizon = transient_time
-        window = int(0.1 * horizon)
 
         return PreprocessingResults(
             system_identification=SystemIdentificationResults(
-                ss=init_data.data["ss"], transient_time=transient_time
+                ss=init_data.data["ss"], transient_time=init_data.data["transient_time"]
             ),
-            horizon=horizon,
-            window=window,
+            horizon=init_data.data["horizon"],
+            window=init_data.data["window"],
             normalization=normalization,
         )
 

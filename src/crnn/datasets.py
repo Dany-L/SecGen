@@ -14,8 +14,13 @@ class RecurrentWindowHorizonDataset(Dataset):
         horizon: int,
         window: int,
     ):
-        self.h = horizon
-        self.w = window
+        self.N = input_seqs[0].shape[0]
+        if self.N < horizon + window + 1:
+            self.w = int(self.N*0.1)
+            self.h = self.N - self.w - 1
+        else:
+            self.h = horizon
+            self.w = window    
         self.nd = input_seqs[0].shape[1]
         self.ne = output_seqs[0].shape[1]
 
@@ -42,7 +47,7 @@ class RecurrentWindowHorizonDataset(Dataset):
         e_seq = list()
 
         for ds, es in zip(d_seqs, e_seqs):
-            n_samples = int(ds.shape[0] / (self.w + self.h + 1))
+            n_samples = int(self.N / (self.w + self.h + 1))
 
             d_init = np.zeros((n_samples, self.w, self.nd + self.ne), dtype=np.float64)
             e_init = np.zeros((n_samples, self.w, self.ne), dtype=np.float64)
@@ -53,7 +58,7 @@ class RecurrentWindowHorizonDataset(Dataset):
             for idx in range(n_samples):
                 time = idx * (self.h + self.w + 1)
 
-                # inputs
+                # input
                 d_init[idx, :, :] = np.hstack(
                     (
                         ds[time + 1 : time + 1 + self.w, :],
@@ -98,8 +103,13 @@ class RecurrentWindowDataset(Dataset):
         horizon: int,
         window: int,
     ):
-        self.h = horizon
-        self.w = window
+        self.N = input_seqs[0].shape[0]
+        if self.N < horizon + window + 1:
+            self.w = int(self.N*0.1)
+            self.h = self.N - self.w - 1
+        else:
+            self.h = horizon
+            self.w = window    
         self.n_d = input_seqs[0].shape[1]
         self.n_e = output_seqs[0].shape[1]
         self.d, self.e = self.__load_data(input_seqs, output_seqs)
@@ -111,9 +121,9 @@ class RecurrentWindowDataset(Dataset):
     ) -> Tuple[NDArray[np.float64], NDArray[np.float64]]:
         d_seq = list()
         e_seq = list()
-        for ds, es in zip(d_seqs, e_seqs):
-            n_samples = int((ds.shape[0]) / (self.w + 1))
-
+        for ds, es in zip(d_seqs, e_seqs):            
+            # number of samples that can be extracted from the sequence
+            n_samples = int(self.N / (self.w + 1))
             d = np.zeros(
                 (n_samples, self.w, self.n_d + self.n_e),
                 dtype=np.float64,

@@ -24,10 +24,12 @@ class BaseTracker:
         directory: str = os.environ["HOME"],
         model_name: str = "",
         type: Literal["preprocessing", "training", "validation"] = "training",
+        dataset_directory: str = os.environ["HOME"]
     ) -> None:
         self.directory = directory
         self.model_name = model_name
         self.log_file_path = str(os.path.join(self.directory, f"{type}.log"))
+        self.dataset_directory = dataset_directory
 
     @abstractmethod
     def track(self, event: Event) -> None:

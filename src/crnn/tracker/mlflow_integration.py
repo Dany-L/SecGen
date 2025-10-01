@@ -22,8 +22,9 @@ class MlFlowTracker(BaseTracker):
         directory: str = os.environ["HOME"],
         model_name: str = "",
         type: Literal["preprocessing", "training", "validation"] = "training",
+        dataset_directory: str = os.environ["HOME"]
     ) -> None:
-        super().__init__(config, directory, model_name, type)
+        super().__init__(config, directory, model_name, type, dataset_directory)
         if hasattr(config.parameters, "tracking_uri"):
             # if config.tracking_uri is not None:
             mlflow.set_tracking_uri(config.parameters.tracking_uri)

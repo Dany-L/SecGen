@@ -11,7 +11,7 @@ from torch.optim import Optimizer, lr_scheduler
 from torch.utils.data import DataLoader
 
 from ..configuration.experiment import BaseExperimentConfig, load_configuration
-from ..configuration.base import PreprocessingResults, Normalization, PREPARED_FOLDER_NAME, TRAIN_FOLDER_NAME, VALIDATION_FOLDER_NAME, IN_DISTRIBUTION_FOLDER_NAME, OUT_OF_DISTRIBUTION_FOLDER_NAME, SystemIdentificationResults
+from ..configuration.base import PROCESSED_FOLDER_NAME, PreprocessingResults, Normalization, PREPARED_FOLDER_NAME, TRAIN_FOLDER_NAME, VALIDATION_FOLDER_NAME, IN_DISTRIBUTION_FOLDER_NAME, OUT_OF_DISTRIBUTION_FOLDER_NAME, SystemIdentificationResults
 from ..io.data import (
     get_result_directory_name,
     load_data,
@@ -73,12 +73,12 @@ def train(
     model_name = f"{experiment_name}-{model_name}"
     model_config = config.models[model_name]
     trackers_config = config.trackers
-    dataset_name = os.path.basename(os.path.dirname(dataset_dir))
+    dataset_name = utils.get_dataset_name(dataset_dir)
     if experiment_config.debug:
         torch.manual_seed(42)
 
     trackers = get_trackers_from_config(
-        trackers_config, result_directory, model_name, "training"
+        trackers_config, result_directory, model_name, "training", dataset_dir
     )
     tracker = AggregatedTracker(trackers)
     tracker.track(ev.Start("", dataset_name))
@@ -102,9 +102,10 @@ def train(
         )
     )
 
+    processed_directory = os.path.join(dataset_dir, PROCESSED_FOLDER_NAME)
     # Check if preprocessing results are available
     preprocessing_results = load_preprocessing_results(
-        result_directory, experiment_config, dataset_dir
+        processed_directory
     )
 
     if preprocessing_results is None:
@@ -125,7 +126,7 @@ def train(
     ]
 
     if missing_data:
-        dataset_name = os.path.basename(os.path.dirname(dataset_dir))
+        dataset_name = utils.get_dataset_name(dataset_dir)
         tracker.track(ev.Log("", f"Missing data types: {missing_data}"))
         raise RuntimeError(
             f"Missing data in {dataset_dir}: {missing_data}. "
@@ -272,7 +273,7 @@ def continue_training(
     model_config = config.models[model_name]
 
     trackers = get_trackers_from_config(
-        trackers_config, result_directory, model_name, "training"
+        trackers_config, result_directory, model_name, "training", dataset_dir
     )
     tracker = AggregatedTracker(trackers)
     tracker.track(ev.LoadTrackingConfiguration("", result_directory, model_name))
